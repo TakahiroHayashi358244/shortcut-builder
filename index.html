@@ -34,7 +34,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .pin-display{font-family:'JetBrains Mono',monospace;font-size:13px;padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--accent);letter-spacing:3px;font-weight:600}
 
 .app{display:flex;height:calc(100vh - 52px)}
-.sidebar{width:300px;min-width:300px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;z-index:50}
+.sidebar{width:300px;min-width:300px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;z-index:50;transition:margin-left .25s ease,opacity .25s ease}
+.sidebar.hidden{margin-left:-300px;opacity:0;pointer-events:none}
+.sidebar-toggle{position:absolute;top:12px;left:12px;z-index:60;width:32px;height:32px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;line-height:1}
+.sidebar-toggle:hover{background:var(--border);color:var(--text)}
+.sidebar-toggle .arrow{transition:transform .25s ease;display:inline-block}
+.sidebar.hidden~.canvas-wrapper .sidebar-toggle .arrow{transform:rotate(180deg)}
 .sidebar-section{padding:16px;border-bottom:1px solid var(--border)}
 .sidebar-section h3{font-size:11px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
 
@@ -197,6 +202,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     </div>
   </div>
   <div class="canvas-wrapper">
+    <button class="sidebar-toggle" onclick="toggleSidebar()" title="サイドバー表示/非表示"><span class="arrow">◀</span></button>
     <div class="canvas" id="canvas"></div>
     <div class="canvas-info"><span id="countInfo">0 個</span><span>端ドラッグ=移動</span><span>中央クリック=リンク</span><span>右クリック=メニュー</span></div>
   </div>
@@ -516,6 +522,13 @@ function importData(){document.getElementById('importText').value='';document.ge
 function closeImportModal(){document.getElementById('importModal').classList.remove('show');}
 function doImport(){const f=document.getElementById('importFile').files[0],t=document.getElementById('importText').value.trim();if(f){const r=new FileReader();r.onload=e=>{try{applyImport(JSON.parse(e.target.result));}catch(err){toast('JSON解析エラー','error');}};r.readAsText(f);}else if(t){try{applyImport(JSON.parse(t));}catch(err){toast('JSON解析エラー','error');}}else toast('入力してください','error');}
 function applyImport(d){if(d.categories)state.categories=[...new Set([...state.categories,...d.categories])];if(d.shortcuts){const mx=state.shortcuts.reduce((m,s)=>Math.max(m,s.id),0);d.shortcuts.forEach((s,i)=>{s.id=mx+i+1;state.shortcuts.push(s);});state.nextId=state.shortcuts.reduce((m,s)=>Math.max(m,s.id),0)+1;}if(d.frames){const mf=(state.frames||[]).reduce((m,f)=>Math.max(m,f.id),0);d.frames.forEach((f,i)=>{f.id=mf+i+1;state.frames.push(f);});state.nextFrameId=(state.frames||[]).reduce((m,f)=>Math.max(m,f.id),0)+1;}saveToStorage();populateCatSelect();renderCanvas();updateCount();closeImportModal();toast('インポート完了','success');}
+
+function toggleSidebar(){
+  const sb=document.querySelector('.sidebar');
+  const arrow=document.querySelector('.sidebar-toggle .arrow');
+  sb.classList.toggle('hidden');
+  arrow.textContent=sb.classList.contains('hidden')?'▶':'◀';
+}
 
 function toast(msg,type='success'){const c=document.getElementById('toastContainer'),t=document.createElement('div');t.className='toast '+type;t.textContent=msg;c.appendChild(t);setTimeout(()=>t.remove(),3000);}
 
