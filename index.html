@@ -399,7 +399,7 @@ async function doCloudUpdate(){
   if(!GAS_URL){toast('先に ⚙ からGAS API URLを設定してください','error');return;}
   toast('上書き更新中...','success');
   try{
-    const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'update',pin:currentPin,data:state})});
+    const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'overwrite',pin:currentPin,data:state})});
     const json=await res.json();
     if(json.success){
       toast('PIN: '+currentPin+' を上書き更新しました','success');
