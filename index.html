@@ -149,7 +149,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <button class="btn" onclick="importData()">インポート</button>
     <button class="btn" onclick="exportJSON()">JSON保存</button>
     <span style="width:1px;height:24px;background:var(--border);margin:0 4px"></span>
-    <button class="btn btn-save" onclick="openSaveModal()">クラウド保存</button>
+    <button class="btn btn-save" onclick="openSaveModal()">新規保存</button>
+    <button class="btn btn-save" onclick="doCloudUpdate()" id="updateBtn" style="display:none;background:#6d28d9;border-color:#6d28d9;">上書き更新</button>
     <button class="btn btn-load" onclick="openLoadModal()">クラウド読込</button>
     <span id="currentPin" class="pin-display" style="display:none"></span>
     <button class="settings-btn" onclick="openSettingsModal()" title="設定">⚙</button>
@@ -240,8 +241,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 
 <!-- Save Modal -->
 <div class="modal-overlay" id="saveModal"><div class="modal" style="text-align:center;">
-  <h2>マイレイアウトを保存</h2>
-  <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">4桁のPINコードを設定してください。<br>このPINで他のPCからも呼び出せます。</p>
+  <h2 id="saveModalTitle">マイレイアウトを保存</h2>
+  <p id="saveModalDesc" style="font-size:12px;color:var(--text2);margin-bottom:8px;">4桁のPINコードを設定してください。<br>このPINで他のPCからも呼び出せます。</p>
   <div class="pin-input-group" id="savePinGroup">
     <input type="text" class="pin-digit" maxlength="1" inputmode="numeric">
     <input type="text" class="pin-digit" maxlength="1" inputmode="numeric">
@@ -251,7 +252,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   <div class="pin-status" id="saveStatus"></div>
   <div class="modal-actions" style="justify-content:center;">
     <button class="btn" onclick="closeSaveModal()">キャンセル</button>
-    <button class="btn btn-save" id="saveBtn" onclick="doCloudSave()">保存する</button>
+    <button class="btn btn-save" id="saveBtn" onclick="doCloudSave()">新規保存</button>
   </div>
 </div></div>
 
@@ -383,12 +384,27 @@ async function doCloudSave(){
       currentPin=pin;
       document.getElementById('currentPin').textContent='PIN: '+pin;
       document.getElementById('currentPin').style.display='inline-block';
+      document.getElementById('updateBtn').style.display='inline-flex';
       setStatus('saveStatus',json.message,'success');
       toast('クラウドに保存しました (PIN: '+pin+')','success');
       setTimeout(closeSaveModal,1200);
     }else{setStatus('saveStatus',json.error||'保存失敗','error');}
   }catch(err){setStatus('saveStatus','通信エラー: '+err.message,'error');}
   document.getElementById('saveBtn').disabled=false;
+}
+
+// ── Cloud Update (overwrite existing PIN) ──
+async function doCloudUpdate(){
+  if(!currentPin){toast('先にクラウド保存または読込をしてください','error');return;}
+  if(!GAS_URL){toast('先に ⚙ からGAS API URLを設定してください','error');return;}
+  toast('上書き更新中...','success');
+  try{
+    const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'update',pin:currentPin,data:state})});
+    const json=await res.json();
+    if(json.success){
+      toast('PIN: '+currentPin+' を上書き更新しました','success');
+    }else{toast(json.error||'更新失敗','error');}
+  }catch(err){toast('通信エラー: '+err.message,'error');}
 }
 
 // ── Cloud Load ──
@@ -413,6 +429,7 @@ async function doCloudLoad(){
       currentPin=pin;
       document.getElementById('currentPin').textContent='PIN: '+pin;
       document.getElementById('currentPin').style.display='inline-block';
+      document.getElementById('updateBtn').style.display='inline-flex';
       setStatus('loadStatus','読み込み完了','success');
       toast('クラウドから読み込みました (PIN: '+pin+')','success');
       setTimeout(closeLoadModal,1200);
