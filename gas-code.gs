@@ -37,6 +37,7 @@ function doPost(e) {
     if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin))
       return jsonResponse({ success: false, error: '4桁の数字PINを指定してください' });
     if (action === 'save') return handleSave(pin, params.data);
+    if (action === 'update') return handleUpdate(pin, params.data);
     if (action === 'load') return handleLoad(pin);
     if (action === 'delete') return handleDelete(pin);
     return jsonResponse({ success: false, error: '不明なアクションです' });
@@ -62,13 +63,23 @@ function handleSave(pin, data) {
   const jsonData = typeof data === 'string' ? data : JSON.stringify(data);
   const row = findPinRow(pin);
   if (row > 0) {
-    sheet.getRange(row, 2).setValue(jsonData);
-    sheet.getRange(row, 3).setValue(now);
-    return jsonResponse({ success: true, message: '更新しました', isNew: false });
-  } else {
-    sheet.appendRow([pin, jsonData, now, now]);
-    return jsonResponse({ success: true, message: '新規保存しました', isNew: true });
+    return jsonResponse({ success: false, error: 'このPINは既に使用されています。別のPINを指定してください。' });
   }
+  sheet.appendRow([pin, jsonData, now, now]);
+  return jsonResponse({ success: true, message: '新規保存しました', isNew: true });
+}
+
+function handleUpdate(pin, data) {
+  const sheet = getSheet();
+  const now = new Date().toISOString();
+  const jsonData = typeof data === 'string' ? data : JSON.stringify(data);
+  const row = findPinRow(pin);
+  if (row < 0) {
+    return jsonResponse({ success: false, error: 'このPINのデータは見つかりません' });
+  }
+  sheet.getRange(row, 2).setValue(jsonData);
+  sheet.getRange(row, 3).setValue(now);
+  return jsonResponse({ success: true, message: '更新しました', isNew: false });
 }
 
 function handleLoad(pin) {
