@@ -79,8 +79,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .size-slider{width:100%;-webkit-appearance:none;height:4px;border-radius:2px;background:var(--border);outline:none}
 .size-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer}
 
-.canvas-wrapper{flex:1;position:relative;overflow:hidden}
-.canvas{position:absolute;inset:0;overflow:auto}
+.canvas-wrapper{flex:1;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.cat-tab-bar{display:flex;gap:0;background:var(--surface);border-bottom:1px solid var(--border);padding:0 48px;overflow-x:auto;flex-shrink:0;z-index:40}
+.cat-tab-bar::-webkit-scrollbar{height:0}
+.cat-tab{font-family:inherit;font-size:12px;font-weight:500;padding:8px 16px;border:none;background:none;color:var(--text2);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all .15s}
+.cat-tab:hover{color:var(--text)}
+.cat-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.cat-tab .cat-count{font-size:10px;margin-left:4px;padding:1px 5px;border-radius:8px;background:var(--border);color:var(--text2)}
+.cat-tab.active .cat-count{background:rgba(79,140,255,.2);color:var(--accent)}
+.canvas{flex:1;position:relative;overflow:auto}
 .canvas::before{content:'';position:absolute;inset:0;width:5000px;height:5000px;background-image:radial-gradient(circle,var(--border) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;opacity:.35}
 
 /* ── Group Frame ── */
@@ -226,6 +233,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   </div>
   <div class="canvas-wrapper">
     <button class="sidebar-toggle" onclick="toggleSidebar()" title="サイドバー表示/非表示"><span class="arrow">◀</span></button>
+    <div class="cat-tab-bar" id="catTabBar"></div>
     <div class="canvas" id="canvas"></div>
     <div class="canvas-info"><span id="countInfo">0 個</span><span>端ドラッグ=移動</span><span>中央クリック=リンク</span><span>右クリック=メニュー</span></div>
   </div>
@@ -362,6 +370,7 @@ let isDragging=false,dragEl=null,dragId=null,dragOffsetX=0,dragOffsetY=0,dragTyp
 let isResizing=false,resizeEl=null,resizeId=null,resizeStartX=0,resizeStartY=0,resizeStartW=0,resizeStartH=0;
 let currentPin=null,GAS_URL='';
 let frameEditId=null,frameSelectedColor=FRAME_COLORS[0],frameBorderWidth=3;
+let activeFilter='all'; // category filter
 
 function init(){
   loadGasUrl();loadFromStorage();
@@ -370,7 +379,7 @@ function init(){
   if(!state.canvasBg) state.canvasBg='#0f1117';
   applyCanvasBg();
   buildPickers();buildCanvasBgPicker();
-  populateCatSelect();renderCanvas();updatePreview();updateCount();
+  populateCatSelect();buildCatTabs();renderCanvas();updatePreview();updateCount();
   setupPinInputs('savePinGroup');setupPinInputs('loadPinGroup');
   document.getElementById('scName').addEventListener('input',updatePreview);
   document.getElementById('sizeSlider').addEventListener('input',e=>{document.getElementById('sizeLabel').textContent=e.target.value;updatePreview();});
@@ -427,7 +436,7 @@ function confirmOverwrite(){if(!currentPin){toast('先に保存/読込','error')
 function closeOverwriteConfirm(){document.getElementById('overwriteConfirmModal').classList.remove('show');}
 function openLoadModal(){if(!GAS_URL){toast('API URL未設定','error');return;}clearPinGroup('loadPinGroup');document.getElementById('loadStatus').textContent='';document.getElementById('loadModal').classList.add('show');setTimeout(()=>document.getElementById('loadPinGroup').querySelector('.pin-digit').focus(),100);}
 function closeLoadModal(){document.getElementById('loadModal').classList.remove('show');}
-async function doCloudLoad(){const pin=getPinFromGroup('loadPinGroup');if(pin.length!==4){setStatus('loadStatus','4桁入力','error');return;}document.getElementById('loadBtn').disabled=true;setStatus('loadStatus','読み込み中...','loading');try{const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'load',pin})});const json=await res.json();if(json.success){state=json.data;if(!state.frames)state.frames=[];if(!state.nextFrameId)state.nextFrameId=1;if(!state.canvasBg)state.canvasBg='#0f1117';applyCanvasBg();saveToStorage();populateCatSelect();renderCanvas();updateCount();currentPin=pin;document.getElementById('currentPin').textContent='PIN: '+pin;document.getElementById('currentPin').style.display='inline-block';document.getElementById('updateBtn').style.display='inline-flex';setStatus('loadStatus','読み込み完了','success');toast('読み込みました','success');setTimeout(closeLoadModal,1200);}else setStatus('loadStatus',json.error||'失敗','error');}catch(err){setStatus('loadStatus','通信エラー','error');}document.getElementById('loadBtn').disabled=false;}
+async function doCloudLoad(){const pin=getPinFromGroup('loadPinGroup');if(pin.length!==4){setStatus('loadStatus','4桁入力','error');return;}document.getElementById('loadBtn').disabled=true;setStatus('loadStatus','読み込み中...','loading');try{const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'load',pin})});const json=await res.json();if(json.success){state=json.data;if(!state.frames)state.frames=[];if(!state.nextFrameId)state.nextFrameId=1;if(!state.canvasBg)state.canvasBg='#0f1117';applyCanvasBg();saveToStorage();populateCatSelect();buildCatTabs();renderCanvas();updateCount();currentPin=pin;document.getElementById('currentPin').textContent='PIN: '+pin;document.getElementById('currentPin').style.display='inline-block';document.getElementById('updateBtn').style.display='inline-flex';setStatus('loadStatus','読み込み完了','success');toast('読み込みました','success');setTimeout(closeLoadModal,1200);}else setStatus('loadStatus',json.error||'失敗','error');}catch(err){setStatus('loadStatus','通信エラー','error');}document.getElementById('loadBtn').disabled=false;}
 function setStatus(id,msg,type){const el=document.getElementById(id);el.textContent=msg;el.className='pin-status '+type;}
 
 // ── Pickers ──
@@ -435,7 +444,7 @@ function buildPickers(){rCP('colorPicker',selectedColor,c=>{selectedColor=c;buil
 function rCP(id,act,cb){const el=document.getElementById(id);el.innerHTML='';COLORS.forEach(c=>{const s=document.createElement('div');s.className='color-swatch'+(c===act?' active':'');s.style.background=c;s.onclick=()=>cb(c);el.appendChild(s);});}
 function rIP(id,act,cb){const el=document.getElementById(id);el.innerHTML='';ICONS.forEach(ic=>{const s=document.createElement('div');s.className='icon-option'+(ic===act?' active':'');s.textContent=ic;s.onclick=()=>cb(ic);el.appendChild(s);});}
 function buildBgPicker(id,act,cb){const el=document.getElementById(id);if(!el)return;el.innerHTML='';BG_COLORS.forEach(bg=>{const s=document.createElement('div');s.className='bg-color-cell'+(bg.color===act?' active':'');s.style.background=bg.color;if(bg.color==='#ffffff'&&!s.classList.contains('active'))s.style.borderColor='#ddd';s.innerHTML='<span class="bg-label">'+bg.label+'</span>';s.onclick=()=>{if(cb)cb(bg.color);};el.appendChild(s);});}
-function populateCatSelect(){['catSelect','editCat'].forEach(id=>{const s=document.getElementById(id);if(!s)return;s.innerHTML='';state.categories.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;s.appendChild(o);});});}
+function populateCatSelect(){['catSelect','editCat'].forEach(id=>{const s=document.getElementById(id);if(!s)return;s.innerHTML='';state.categories.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;s.appendChild(o);});});buildCatTabs();}
 
 // ── Preview ──
 function updatePreview(){
@@ -463,31 +472,53 @@ function addShortcut(){
 function findFree(sz){const cv=document.getElementById('canvas'),cw=cv.clientWidth||800,gap=16,cols=Math.max(1,Math.floor(cw/(sz+gap)));for(let r=0;r<200;r++)for(let c=0;c<cols;c++){const x=gap+c*(sz+gap),y=gap+r*(sz+gap);if(!state.shortcuts.some(s=>!(x+sz<s.x||x>s.x+(s.w||120)||y+sz<s.y||y>s.y+(s.h||120))))return{x,y};}return{x:16,y:16};}
 
 // ══════════════════════════
+// ── CATEGORY TABS ──
+// ══════════════════════════
+function buildCatTabs(){
+  const bar=document.getElementById('catTabBar');bar.innerHTML='';
+  const allCount=state.shortcuts.length;
+  const allTab=document.createElement('button');allTab.className='cat-tab'+(activeFilter==='all'?' active':'');
+  allTab.innerHTML='すべて<span class="cat-count">'+allCount+'</span>';
+  allTab.onclick=()=>setFilter('all');bar.appendChild(allTab);
+  state.categories.forEach(cat=>{
+    const cnt=state.shortcuts.filter(s=>s.category===cat).length;
+    const t=document.createElement('button');t.className='cat-tab'+(activeFilter===cat?' active':'');
+    t.innerHTML=esc(cat)+'<span class="cat-count">'+cnt+'</span>';
+    t.onclick=()=>setFilter(cat);bar.appendChild(t);
+  });
+}
+function setFilter(cat){activeFilter=cat;buildCatTabs();renderCanvas();}
+
+// ══════════════════════════
 // ── RENDER ──
 // ══════════════════════════
 function renderCanvas(){
   const cv=document.getElementById('canvas');
   cv.querySelectorAll('.shortcut-btn,.empty-hint,.group-frame').forEach(e=>e.remove());
 
-  // Frames
-  (state.frames||[]).forEach(f=>{
-    const el=document.createElement('div');el.className='group-frame';el.dataset.fid=f.id;
-    const col=f.color||FRAME_COLORS[0],bw=f.borderWidth||3;
-    el.style.cssText=`left:${f.x}px;top:${f.y}px;width:${f.w}px;height:${f.h}px;border:${bw}px solid ${col}55;`;
-    el.innerHTML=`<div class="frame-tab" style="background:${col}22;color:${col};border:${bw}px solid ${col}55;border-bottom:none;">${esc(f.name)}</div><div class="frame-actions"><button class="frame-action-btn" onclick="event.stopPropagation();editFrame(${f.id})" title="編集">✎</button><button class="frame-action-btn delete" onclick="event.stopPropagation();deleteFrame(${f.id})" title="削除">✕</button></div><div class="frame-resize" data-fid="${f.id}"></div>`;
-    const tab=el.querySelector('.frame-tab');
-    tab.addEventListener('mousedown',e=>{if(e.button===2)return;e.preventDefault();startDrag(el,e.clientX,e.clientY,'frame');});
-    tab.addEventListener('touchstart',e=>{e.preventDefault();startDrag(el,e.touches[0].clientX,e.touches[0].clientY,'frame');},{passive:false});
-    const rh=el.querySelector('.frame-resize');
-    rh.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();startResize(el,f.id,e.clientX,e.clientY);});
-    rh.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();startResize(el,f.id,e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
-    el.addEventListener('contextmenu',e=>{if(e.target.closest('.frame-action-btn'))return;e.preventDefault();e.stopPropagation();fctxTargetId=f.id;showFrameCtx(e.clientX,e.clientY);});
-    cv.appendChild(el);
-  });
+  // Frames (always show on 'all', hide on category filter)
+  if(activeFilter==='all'){
+    (state.frames||[]).forEach(f=>{
+      const el=document.createElement('div');el.className='group-frame';el.dataset.fid=f.id;
+      const col=f.color||FRAME_COLORS[0],bw=f.borderWidth||3;
+      el.style.cssText=`left:${f.x}px;top:${f.y}px;width:${f.w}px;height:${f.h}px;border:${bw}px solid ${col}55;`;
+      el.innerHTML=`<div class="frame-tab" style="background:${col}22;color:${col};border:${bw}px solid ${col}55;border-bottom:none;">${esc(f.name)}</div><div class="frame-actions"><button class="frame-action-btn" onclick="event.stopPropagation();editFrame(${f.id})" title="編集">✎</button><button class="frame-action-btn delete" onclick="event.stopPropagation();deleteFrame(${f.id})" title="削除">✕</button></div><div class="frame-resize" data-fid="${f.id}"></div>`;
+      const tab=el.querySelector('.frame-tab');
+      tab.addEventListener('mousedown',e=>{if(e.button===2)return;e.preventDefault();startDrag(el,e.clientX,e.clientY,'frame');});
+      tab.addEventListener('touchstart',e=>{e.preventDefault();startDrag(el,e.touches[0].clientX,e.touches[0].clientY,'frame');},{passive:false});
+      const rh=el.querySelector('.frame-resize');
+      rh.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();startResize(el,f.id,e.clientX,e.clientY);});
+      rh.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();startResize(el,f.id,e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+      el.addEventListener('contextmenu',e=>{if(e.target.closest('.frame-action-btn'))return;e.preventDefault();e.stopPropagation();fctxTargetId=f.id;showFrameCtx(e.clientX,e.clientY);});
+      cv.appendChild(el);
+    });
+  }
 
-  // Shortcuts
-  if(!state.shortcuts.length&&!(state.frames||[]).length){const h=document.createElement('div');h.className='empty-hint';h.innerHTML='<div class="icon">📌</div><p>左のフォームまたは右上「＋ 新規作成」からショートカットを追加</p>';cv.appendChild(h);return;}
-  state.shortcuts.forEach(s=>{
+  // Filter shortcuts by category
+  const filtered=activeFilter==='all'?state.shortcuts:state.shortcuts.filter(s=>s.category===activeFilter);
+
+  if(!filtered.length&&(activeFilter!=='all'||!(state.frames||[]).length)){const h=document.createElement('div');h.className='empty-hint';h.innerHTML=activeFilter==='all'?'<div class="icon">📌</div><p>ヘッダーの「＋ 新規作成」からショートカットを追加</p>':'<div class="icon">📂</div><p>このカテゴリーにはショートカットがありません</p>';cv.appendChild(h);return;}
+  filtered.forEach(s=>{
     const el=document.createElement('div'),w=s.w||120,h=s.h||120,fs=s.fontSize||14;
     el.className='shortcut-btn';el.dataset.id=s.id;
     el.style.cssText=`left:${s.x}px;top:${s.y}px;width:${w}px;height:${h}px;background:linear-gradient(145deg,${s.color}DD,${s.color}88);`;
@@ -503,7 +534,7 @@ function renderCanvas(){
   });
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
-function updateCount(){document.getElementById('countInfo').textContent=state.shortcuts.length+' 個';}
+function updateCount(){document.getElementById('countInfo').textContent=state.shortcuts.length+' 個';buildCatTabs();}
 
 // ── Drag ──
 function startDrag(el,cx,cy,type){isDragging=true;dragEl=el;dragType=type;dragId=parseInt(type==='frame'?el.dataset.fid:el.dataset.id);const r=el.getBoundingClientRect();dragOffsetX=cx-r.left;dragOffsetY=cy-r.top;el.classList.add('dragging');}
