@@ -181,7 +181,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <button class="btn" onclick="exportJSON()">JSON保存</button>
     <span style="width:1px;height:24px;background:var(--border);margin:0 4px"></span>
     <button class="btn btn-save" onclick="openSaveModal()">新規保存</button>
-    <button class="btn btn-save" onclick="doCloudUpdate()" id="updateBtn" style="display:none;background:#6d28d9;border-color:#6d28d9;">上書き更新</button>
+    <button class="btn btn-save" onclick="confirmOverwrite()" id="updateBtn" style="display:none;background:#6d28d9;border-color:#6d28d9;">上書き更新</button>
     <button class="btn btn-load" onclick="openLoadModal()">クラウド読込</button>
     <span id="currentPin" class="pin-display" style="display:none"></span>
     <button class="settings-btn" onclick="openSettingsModal()" title="設定">⚙</button>
@@ -299,6 +299,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   <div class="modal-actions" style="justify-content:center;"><button class="btn" onclick="closeLoadModal()">キャンセル</button><button class="btn btn-load" id="loadBtn" onclick="doCloudLoad()">読み込む</button></div>
 </div></div>
 
+<!-- Overwrite Confirm Modal -->
+<div class="modal-overlay" id="overwriteConfirmModal"><div class="modal" style="text-align:center;">
+  <h2>上書き更新の確認</h2>
+  <p style="font-size:13px;color:var(--text2);margin-bottom:6px;line-height:1.8;">PIN: <span id="overwritePinDisplay" style="font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:700;letter-spacing:2px;"></span></p>
+  <p style="font-size:13px;color:var(--danger);margin-bottom:16px;line-height:1.8;">既存のデータが上書きされます。<br>この操作は元に戻せません。</p>
+  <div style="display:flex;gap:8px;justify-content:center;">
+    <button class="btn" onclick="closeOverwriteConfirm()">キャンセル</button>
+    <button class="btn btn-save" style="background:#6d28d9;border-color:#6d28d9;" onclick="closeOverwriteConfirm();doCloudUpdate();">上書きする</button>
+  </div>
+</div></div>
+
 <!-- Import Modal -->
 <div class="modal-overlay" id="importModal"><div class="modal">
 
@@ -412,6 +423,8 @@ function openSaveModal(){if(!GAS_URL){toast('API URL未設定','error');return;}
 function closeSaveModal(){document.getElementById('saveModal').classList.remove('show');}
 async function doCloudSave(){const pin=getPinFromGroup('savePinGroup');if(pin.length!==4){setStatus('saveStatus','4桁入力','error');return;}document.getElementById('saveBtn').disabled=true;setStatus('saveStatus','保存中...','loading');try{const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save',pin,data:state})});const json=await res.json();if(json.success){currentPin=pin;document.getElementById('currentPin').textContent='PIN: '+pin;document.getElementById('currentPin').style.display='inline-block';document.getElementById('updateBtn').style.display='inline-flex';setStatus('saveStatus',json.message,'success');toast('保存しました (PIN: '+pin+')','success');setTimeout(closeSaveModal,1200);}else setStatus('saveStatus',json.error||'保存失敗','error');}catch(err){setStatus('saveStatus','通信エラー','error');}document.getElementById('saveBtn').disabled=false;}
 async function doCloudUpdate(){if(!currentPin){toast('先に保存/読込','error');return;}if(!GAS_URL){toast('API URL未設定','error');return;}toast('更新中...','success');try{const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'overwrite',pin:currentPin,data:state})});const json=await res.json();if(json.success)toast('PIN: '+currentPin+' 上書き更新','success');else toast(json.error||'更新失敗','error');}catch(err){toast('通信エラー','error');}}
+function confirmOverwrite(){if(!currentPin){toast('先に保存/読込','error');return;}document.getElementById('overwritePinDisplay').textContent=currentPin;document.getElementById('overwriteConfirmModal').classList.add('show');}
+function closeOverwriteConfirm(){document.getElementById('overwriteConfirmModal').classList.remove('show');}
 function openLoadModal(){if(!GAS_URL){toast('API URL未設定','error');return;}clearPinGroup('loadPinGroup');document.getElementById('loadStatus').textContent='';document.getElementById('loadModal').classList.add('show');setTimeout(()=>document.getElementById('loadPinGroup').querySelector('.pin-digit').focus(),100);}
 function closeLoadModal(){document.getElementById('loadModal').classList.remove('show');}
 async function doCloudLoad(){const pin=getPinFromGroup('loadPinGroup');if(pin.length!==4){setStatus('loadStatus','4桁入力','error');return;}document.getElementById('loadBtn').disabled=true;setStatus('loadStatus','読み込み中...','loading');try{const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'load',pin})});const json=await res.json();if(json.success){state=json.data;if(!state.frames)state.frames=[];if(!state.nextFrameId)state.nextFrameId=1;if(!state.canvasBg)state.canvasBg='#0f1117';applyCanvasBg();saveToStorage();populateCatSelect();renderCanvas();updateCount();currentPin=pin;document.getElementById('currentPin').textContent='PIN: '+pin;document.getElementById('currentPin').style.display='inline-block';document.getElementById('updateBtn').style.display='inline-flex';setStatus('loadStatus','読み込み完了','success');toast('読み込みました','success');setTimeout(closeLoadModal,1200);}else setStatus('loadStatus',json.error||'失敗','error');}catch(err){setStatus('loadStatus','通信エラー','error');}document.getElementById('loadBtn').disabled=false;}
