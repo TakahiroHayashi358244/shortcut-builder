@@ -529,8 +529,8 @@ function renderCanvas(){
     el.innerHTML=`<div class="drag-zone"></div><div class="link-zone"></div><div class="drag-edge-indicator"></div><div class="sc-actions"><button class="sc-action-btn edit-btn" title="編集">✎</button><button class="sc-action-btn delete delete-btn" title="削除">✕</button></div><div class="sc-content"><div class="sc-icon" style="background:${iconBg}">${s.icon}</div><div class="sc-name" style="font-size:${fs}px;text-shadow:${txtShadow}">${esc(s.name)}</div><div class="sc-category" style="text-shadow:${txtShadow}">${esc(s.category)}</div></div>`;
     el.querySelector('.drag-zone').addEventListener('mousedown',e=>{if(e.button===2)return;startDrag(el,e.clientX,e.clientY,'shortcut');e.preventDefault();});
     el.querySelector('.drag-zone').addEventListener('touchstart',e=>{const t=e.touches[0],rect=el.getBoundingClientRect(),rx=(t.clientX-rect.left)/rect.width,ry=(t.clientY-rect.top)/rect.height;if(rx>.2&&rx<.8&&ry>.2&&ry<.8)return;startDrag(el,t.clientX,t.clientY,'shortcut');e.preventDefault();},{passive:false});
-    el.querySelector('.link-zone').addEventListener('click',e=>{e.stopPropagation();window.open(s.url,'_blank');});
-    el.querySelector('.link-zone').addEventListener('touchend',e=>{if(!isDragging){e.preventDefault();window.open(s.url,'_blank');}});
+    el.querySelector('.link-zone').addEventListener('click',e=>{e.stopPropagation();window.open(s.url,'_blank','noopener,noreferrer');});
+    el.querySelector('.link-zone').addEventListener('touchend',e=>{if(!isDragging){e.preventDefault();window.open(s.url,'_blank','noopener,noreferrer');}});
     el.querySelector('.edit-btn').addEventListener('click',e=>{e.stopPropagation();editShortcut(s.id);});
     el.querySelector('.delete-btn').addEventListener('click',e=>{e.stopPropagation();deleteShortcut(s.id);});
     el.addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation();ctxTargetId=s.id;showCtx(e.clientX,e.clientY);});
@@ -577,7 +577,7 @@ function fctxDelete(){deleteFrame(fctxTargetId);hideFrameContextMenu();}
 // ── Shortcut Context ──
 function showCtx(x,y){const m=document.getElementById('contextMenu');m.style.left=x+'px';m.style.top=y+'px';m.classList.add('show');}
 function hideContextMenu(){document.getElementById('contextMenu').classList.remove('show');}
-function ctxOpen(){const s=state.shortcuts.find(x=>x.id===ctxTargetId);if(s)window.open(s.url,'_blank');hideContextMenu();}
+function ctxOpen(){const s=state.shortcuts.find(x=>x.id===ctxTargetId);if(s)window.open(s.url,'_blank','noopener,noreferrer');hideContextMenu();}
 function ctxEdit(){editShortcut(ctxTargetId);hideContextMenu();}
 function ctxDuplicate(){const s=state.shortcuts.find(x=>x.id===ctxTargetId);if(!s)return;state.shortcuts.push({...s,id:state.nextId++,x:s.x+20,y:s.y+20});saveToStorage();renderCanvas();updateCount();hideContextMenu();toast('複製','success');}
 function ctxDelete(){deleteShortcut(ctxTargetId);hideContextMenu();}
