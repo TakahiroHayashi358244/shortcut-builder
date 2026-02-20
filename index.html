@@ -520,9 +520,13 @@ function renderCanvas(){
   if(!filtered.length&&(activeFilter!=='all'||!(state.frames||[]).length)){const h=document.createElement('div');h.className='empty-hint';h.innerHTML=activeFilter==='all'?'<div class="icon">📌</div><p>ヘッダーの「＋ 新規作成」からショートカットを追加</p>':'<div class="icon">📂</div><p>このカテゴリーにはショートカットがありません</p>';cv.appendChild(h);return;}
   filtered.forEach(s=>{
     const el=document.createElement('div'),w=s.w||120,h=s.h||120,fs=s.fontSize||14;
+    const light=isLight(s.color);
+    const txtCol=light?'#1a1a2e':'#fff';
+    const txtShadow=light?'0 1px 2px rgba(0,0,0,.1)':'0 1px 3px rgba(0,0,0,.4)';
+    const iconBg=light?'rgba(0,0,0,.1)':'rgba(255,255,255,.15)';
     el.className='shortcut-btn';el.dataset.id=s.id;
-    el.style.cssText=`left:${s.x}px;top:${s.y}px;width:${w}px;height:${h}px;background:linear-gradient(145deg,${s.color}DD,${s.color}88);`;
-    el.innerHTML=`<div class="drag-zone"></div><div class="link-zone"></div><div class="drag-edge-indicator"></div><div class="sc-actions"><button class="sc-action-btn edit-btn" title="編集">✎</button><button class="sc-action-btn delete delete-btn" title="削除">✕</button></div><div class="sc-content"><div class="sc-icon">${s.icon}</div><div class="sc-name" style="font-size:${fs}px">${esc(s.name)}</div><div class="sc-category">${esc(s.category)}</div></div>`;
+    el.style.cssText=`left:${s.x}px;top:${s.y}px;width:${w}px;height:${h}px;background:linear-gradient(145deg,${s.color}DD,${s.color}88);color:${txtCol};`;
+    el.innerHTML=`<div class="drag-zone"></div><div class="link-zone"></div><div class="drag-edge-indicator"></div><div class="sc-actions"><button class="sc-action-btn edit-btn" title="編集">✎</button><button class="sc-action-btn delete delete-btn" title="削除">✕</button></div><div class="sc-content"><div class="sc-icon" style="background:${iconBg}">${s.icon}</div><div class="sc-name" style="font-size:${fs}px;text-shadow:${txtShadow}">${esc(s.name)}</div><div class="sc-category" style="text-shadow:${txtShadow}">${esc(s.category)}</div></div>`;
     el.querySelector('.drag-zone').addEventListener('mousedown',e=>{if(e.button===2)return;startDrag(el,e.clientX,e.clientY,'shortcut');e.preventDefault();});
     el.querySelector('.drag-zone').addEventListener('touchstart',e=>{const t=e.touches[0],rect=el.getBoundingClientRect(),rx=(t.clientX-rect.left)/rect.width,ry=(t.clientY-rect.top)/rect.height;if(rx>.2&&rx<.8&&ry>.2&&ry<.8)return;startDrag(el,t.clientX,t.clientY,'shortcut');e.preventDefault();},{passive:false});
     el.querySelector('.link-zone').addEventListener('click',e=>{e.stopPropagation();window.open(s.url,'_blank');});
@@ -534,6 +538,7 @@ function renderCanvas(){
   });
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function isLight(hex){const c=hex.replace('#','');const r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);return(r*299+g*587+b*114)/1000>160;}
 function updateCount(){document.getElementById('countInfo').textContent=state.shortcuts.length+' 個';buildCatTabs();}
 
 // ── Drag ──
