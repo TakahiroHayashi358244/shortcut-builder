@@ -748,6 +748,10 @@ textarea.input{resize:vertical;line-height:1.65}
     <input class="pin-digit" maxlength="1" inputmode="numeric">
     <input class="pin-digit" maxlength="1" inputmode="numeric">
   </div>
+  <div style="margin:10px 24px 0;text-align:left">
+    <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">名前（任意）</label>
+    <input id="saveNameInput" class="input" placeholder="例：川越倉庫用" style="font-size:13px;text-align:left">
+  </div>
   <div class="pin-status" id="saveStatus"></div>
   <div class="modal-actions center">
     <button class="btn btn-sm" onclick="closeSaveModal()">キャンセル</button>
@@ -832,6 +836,21 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="modal-actions" style="margin-top:14px">
     <button class="btn btn-sm" onclick="openMemoEditFromView()">✏️ メモを編集</button>
     <button class="btn btn-primary btn-sm" id="memoViewOpenBtn" onclick="openMemoViewUrl()">🔗 リンクを開く</button>
+  </div>
+</div></div>
+
+<!-- PIN Rename Modal -->
+<div class="overlay" id="renameOverlay" onclick="closeOnBg(event,'renameOverlay')">
+<div class="modal" style="max-width:360px">
+  <h2>名前を変更</h2>
+  <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--accent);letter-spacing:3px;text-align:center;margin:8px 0 16px" id="renamePinDisp"></div>
+  <div class="form-group">
+    <label>名前（任意）</label>
+    <input id="renameInput" class="input" placeholder="例：川越倉庫用">
+  </div>
+  <div class="modal-actions">
+    <button class="btn btn-sm" onclick="document.getElementById('renameOverlay').classList.remove('open')">キャンセル</button>
+    <button class="btn btn-primary btn-sm" onclick="doRename()">保存</button>
   </div>
 </div></div>
 
@@ -1143,22 +1162,25 @@ function openSaveModal() {
   if (!GAS_URL) { toast('API URL未設定です（⚙設定から入力）','error'); return; }
   clearPin('savePinGroup');
   document.getElementById('saveStatus').textContent = '';
+  document.getElementById('saveNameInput').value = '';
   document.getElementById('saveOverlay').classList.add('open');
   setTimeout(() => document.getElementById('savePinGroup').querySelector('.pin-digit').focus(), 100);
 }
 function closeSaveModal() { document.getElementById('saveOverlay').classList.remove('open'); }
 
 async function doCloudSave() {
-  const pin = getPin('savePinGroup');
+  const pin  = getPin('savePinGroup');
+  const name = document.getElementById('saveNameInput').value.trim();
   if (pin.length !== 4) { setStatus('saveStatus','4桁入力してください','error'); return; }
   document.getElementById('saveBtn').disabled = true;
   setStatus('saveStatus','保存中…','loading');
   try {
-    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'save',pin,data:state}) });
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'save',pin,name,data:state}) });
     const json = await res.json();
     if (json.success) {
       currentPin = pin;
-      const _cp=document.getElementById('currentPin'); _cp.textContent='PIN: '+pin; _cp.classList.add('active');
+      const label = name ? `${name}（${pin}）` : `PIN: ${pin}`;
+      const _cp=document.getElementById('currentPin'); _cp.textContent=label; _cp.classList.add('active');
       document.getElementById('updateBtn').style.display = 'inline-flex';
       setStatus('saveStatus', json.message, 'success');
       toast('保存しました (PIN: '+pin+')');
@@ -1213,18 +1235,27 @@ async function fetchPinList() {
     if (json.success && json.pins && json.pins.length > 0) {
       area.innerHTML = '';
       json.pins.forEach(item => {
-        const row = document.createElement('button');
-        row.className = 'btn btn-ghost btn-sm';
-        row.style.cssText = 'width:100%;justify-content:space-between;margin-bottom:5px;font-family:"DM Mono",monospace';
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:5px';
         const updated = item.updated ? new Date(item.updated).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-        row.innerHTML = `<span style="font-size:14px;font-weight:700;letter-spacing:2px;color:var(--accent)">${item.pin}</span><span style="font-size:10px;color:var(--text3)">${updated}</span>`;
-        row.onclick = () => {
-          // PIN桁に自動入力
+        const nameStr = item.name ? `<span style="font-size:11px;color:var(--text2);margin-left:4px">${esc(item.name)}</span>` : '';
+        const loadBtn = document.createElement('button');
+        loadBtn.className = 'btn btn-ghost btn-sm';
+        loadBtn.style.cssText = 'flex:1;justify-content:space-between;font-family:"DM Mono",monospace';
+        loadBtn.innerHTML = `<span><span style="font-size:14px;font-weight:700;letter-spacing:2px;color:var(--accent)">${item.pin}</span>${nameStr}</span><span style="font-size:10px;color:var(--text3)">${updated}</span>`;
+        loadBtn.onclick = () => {
           const digits = document.getElementById('loadPinGroup').querySelectorAll('.pin-digit');
           item.pin.split('').forEach((ch, i) => { if (digits[i]) digits[i].value = ch; });
-          // 即時読込
           doCloudLoad();
         };
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-ghost btn-sm';
+        editBtn.style.cssText = 'padding:5px 8px;flex-shrink:0';
+        editBtn.title = '名前を変更';
+        editBtn.textContent = '✏️';
+        editBtn.onclick = () => openRenameModal(item.pin, item.name || '');
+        row.appendChild(loadBtn);
+        row.appendChild(editBtn);
         area.appendChild(row);
       });
     } else if (json.success && (!json.pins || json.pins.length === 0)) {
@@ -1236,6 +1267,34 @@ async function fetchPinList() {
     area.innerHTML = '<p style="font-size:12px;color:var(--danger);text-align:center;padding:8px">通信エラー</p>';
   }
   if (btn) btn.disabled = false;
+}
+
+let renamePinTarget = null;
+function openRenameModal(pin, currentName) {
+  renamePinTarget = pin;
+  document.getElementById('renamePinDisp').textContent = pin;
+  document.getElementById('renameInput').value = currentName;
+  document.getElementById('renameOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('renameInput').focus(), 100);
+}
+async function doRename() {
+  if (!renamePinTarget || !GAS_URL) return;
+  const name = document.getElementById('renameInput').value.trim();
+  try {
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'rename', pin:renamePinTarget, name}) });
+    const json = await res.json();
+    if (json.success) {
+      toast('名前を変更しました');
+      // 現在読込中のPINと一致すれば表示も更新
+      if (renamePinTarget === currentPin) {
+        const label = name ? `${name}（${currentPin}）` : `PIN: ${currentPin}`;
+        const _cp = document.getElementById('currentPin');
+        _cp.textContent = label; _cp.classList.add('active');
+      }
+      document.getElementById('renameOverlay').classList.remove('open');
+      fetchPinList();  // 一覧を再取得
+    } else { toast(json.error||'変更失敗','error'); }
+  } catch(e) { toast('通信エラー','error'); }
 }
 
 async function doCloudLoad() {
@@ -1255,7 +1314,9 @@ async function doCloudLoad() {
       state.shortcuts = (state.shortcuts||[]).map(s => ({memo:'', ...s}));
       applyBg(); save(); populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount();
       currentPin = pin;
-      const _cp=document.getElementById('currentPin'); _cp.textContent='PIN: '+pin; _cp.classList.add('active');
+      const loadedName = json.name || '';
+      const label = loadedName ? `${loadedName}（${pin}）` : `PIN: ${pin}`;
+      const _cp=document.getElementById('currentPin'); _cp.textContent=label; _cp.classList.add('active');
       document.getElementById('updateBtn').style.display = 'inline-flex';
       setStatus('loadStatus','読み込み完了','success');
       toast('読み込みました');
