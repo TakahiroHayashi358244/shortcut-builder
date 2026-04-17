@@ -365,8 +365,8 @@ textarea.input{resize:vertical;line-height:1.65}
   border:1px solid var(--border2);
   border-radius:12px;
   box-shadow:var(--shadow-lg);
-  width:280px;
-  max-height:340px;
+  width:460px;
+  max-height:520px;
   overflow:hidden;
   display:flex;flex-direction:column;
   pointer-events:auto;
@@ -379,40 +379,40 @@ textarea.input{resize:vertical;line-height:1.65}
 }
 .memo-popup-header{
   display:flex;align-items:center;gap:8px;
-  padding:10px 12px 8px;
+  padding:12px 16px 10px;
   border-bottom:1px solid var(--border);
   flex-shrink:0;
 }
 .memo-popup-icon{
-  width:28px;height:28px;border-radius:7px;
-  display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;
+  width:32px;height:32px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
 }
-.memo-popup-name{font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.memo-popup-name{font-size:14px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .memo-popup-close{
-  width:22px;height:22px;border:none;border-radius:5px;
-  background:transparent;color:var(--text3);font-size:13px;
+  width:26px;height:26px;border:none;border-radius:6px;
+  background:transparent;color:var(--text3);font-size:15px;
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;transition:background .1s;flex-shrink:0;
 }
 .memo-popup-close:hover{background:var(--bg4);color:var(--text)}
 .memo-popup-body{
-  padding:10px 12px;overflow-y:auto;flex:1;
-  font-size:12px;line-height:1.7;color:var(--text2);
+  padding:14px 16px;overflow-y:auto;flex:1;
+  font-size:13px;line-height:1.75;color:var(--text);
 }
-.memo-popup-body h1,.memo-popup-body h2,.memo-popup-body h3{color:var(--text);margin:8px 0 4px;font-size:12px}
+.memo-popup-body h1,.memo-popup-body h2,.memo-popup-body h3{color:var(--text);margin:10px 0 5px;font-size:14px}
 .memo-popup-body h1:first-child,.memo-popup-body h2:first-child,.memo-popup-body h3:first-child{margin-top:0}
-.memo-popup-body ul,.memo-popup-body ol{padding-left:14px}
-.memo-popup-body li{margin-bottom:2px}
+.memo-popup-body ul,.memo-popup-body ol{padding-left:16px}
+.memo-popup-body li{margin-bottom:3px}
 .memo-popup-body strong{color:var(--text)}
-.memo-popup-body code{background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-family:'DM Mono',monospace;font-size:10px}
+.memo-popup-body code{background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'DM Mono',monospace;font-size:12px}
 .memo-popup-body a{color:var(--accent);text-decoration:underline}
-.memo-popup-body hr{border:none;border-top:1px solid var(--border);margin:8px 0}
-.memo-popup-body p{margin-bottom:4px}
+.memo-popup-body hr{border:none;border-top:1px solid var(--border);margin:10px 0}
+.memo-popup-body p{margin-bottom:6px}
 .memo-popup-footer{
-  padding:7px 10px;border-top:1px solid var(--border);
-  display:flex;gap:6px;flex-shrink:0;
+  padding:10px 12px;border-top:1px solid var(--border);
+  display:flex;gap:8px;flex-shrink:0;
 }
-.memo-popup-footer .btn{flex:1;font-size:11px;padding:5px 8px}
+.memo-popup-footer .btn{flex:1;font-size:12px;padding:8px 10px}
 
 /* ══════════════════════════════════
    CONNECTOR
@@ -571,10 +571,27 @@ textarea.input{resize:vertical;line-height:1.65}
           </select>
         </div>
       </div>
+      <div class="s-section">
+        <div class="s-label">メモポップアップ</div>
+        <div class="form-row">
+          <label>サイズ</label>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <button class="btn btn-sm popup-size-btn" data-size="s" onclick="setPopupSize('s')" style="flex:1">小</button>
+            <button class="btn btn-sm popup-size-btn" data-size="m" onclick="setPopupSize('m')" style="flex:1">中</button>
+            <button class="btn btn-sm popup-size-btn" data-size="l" onclick="setPopupSize('l')" style="flex:1">大</button>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:10px">
+          <label>文字サイズ</label>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <button class="btn btn-sm popup-font-btn" data-font="s" onclick="setPopupFont('s')" style="flex:1">小</button>
+            <button class="btn btn-sm popup-font-btn" data-font="m" onclick="setPopupFont('m')" style="flex:1">中</button>
+            <button class="btn btn-sm popup-font-btn" data-font="l" onclick="setPopupFont('l')" style="flex:1">大</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-
-  <!-- Canvas -->
   <div class="canvas-wrapper" id="canvasWrapper">
     <button class="sb-toggle" onclick="toggleSidebar()"><span class="sb-arrow">◀</span></button>
     <div class="cat-tab-bar" id="catTabBar"></div>
@@ -960,7 +977,8 @@ let state = {
   shortcuts: [], frames: [], connections: [],
   nextId: 1, nextFrameId: 1, nextConnId: 1,
   canvasBg: '#f5f0e8',
-  connDefault: { color: '#4a7bd4', width: 2, arrow: 'end' }
+  connDefault: { color: '#4a7bd4', width: 2, arrow: 'end' },
+  popupSettings: { size: 'm', font: 'm' }
 };
 let selColor = COLORS[0], selIcon = ICONS[0];
 let editColor = COLORS[0], editIcon = ICONS[0];
@@ -1000,6 +1018,7 @@ function loadState() {
     if (!state.connections) state.connections = [];
     if (!state.nextConnId) state.nextConnId = 1;
     if (!state.connDefault) state.connDefault = { color:'#4a7bd4', width:2, arrow:'end' };
+    if (!state.popupSettings) state.popupSettings = { size:'m', font:'m' };
     migrateConnections(state);
   } catch(e) {}
 }
@@ -1045,6 +1064,34 @@ function syncConnDefault(key, val) {
     if (ma) ma.value = val;
   }
   save();
+}
+
+// ポップアップサイズ・フォント設定
+const POPUP_SIZE = { s:{w:320,h:360}, m:{w:460,h:520}, l:{w:600,h:660} };
+const POPUP_FONT = { s:'11px', m:'13px', l:'16px' };
+
+function applyPopupSettings() {
+  const ps = state.popupSettings || { size:'m', font:'m' };
+  const sz = POPUP_SIZE[ps.size] || POPUP_SIZE.m;
+  const el = document.getElementById('memoPopup');
+  if (el) { el.style.width = sz.w+'px'; el.style.maxHeight = sz.h+'px'; }
+  const body = document.querySelector('.memo-popup-body');
+  if (body) body.style.fontSize = POPUP_FONT[ps.font] || POPUP_FONT.m;
+  // ボタンのアクティブ状態を更新
+  document.querySelectorAll('.popup-size-btn').forEach(b =>
+    b.classList.toggle('btn-primary', b.dataset.size === ps.size));
+  document.querySelectorAll('.popup-font-btn').forEach(b =>
+    b.classList.toggle('btn-primary', b.dataset.font === ps.font));
+}
+function setPopupSize(s) {
+  if (!state.popupSettings) state.popupSettings = { size:'m', font:'m' };
+  state.popupSettings.size = s;
+  save(); applyPopupSettings();
+}
+function setPopupFont(f) {
+  if (!state.popupSettings) state.popupSettings = { size:'m', font:'m' };
+  state.popupSettings.font = f;
+  save(); applyPopupSettings();
 }
 
 function openSettingsModal() {
@@ -1702,7 +1749,7 @@ function openMemoPopup(id, cardEl) {
 
   // position: カードの上側中央に表示
   popup.style.display = 'flex';
-  const popW = 280, popH = Math.min(340, popup.scrollHeight + 60);
+  const popW = 460, popH = Math.min(520, popup.scrollHeight + 60);
   const rect = cardEl.getBoundingClientRect();
   const vw = window.innerWidth, vh = window.innerHeight;
 
@@ -2262,6 +2309,7 @@ function init() {
   document.getElementById('connDefaultWidthLabelSidebar').textContent = cd.width;
   document.getElementById('connDefaultArrowSidebar').value = cd.arrow;
   buildConnDefaultColorPicker();
+  applyPopupSettings();
   } catch(e) {}
   populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount(); updatePreview();
   setupPin('savePinGroup'); setupPin('loadPinGroup');
