@@ -490,8 +490,8 @@ textarea.input{resize:vertical;line-height:1.65}
     <button class="btn btn-connector" id="connectorBtn" onclick="addConnector()">➜ コネクタ追加</button>
   </div>
   <div class="header-right">
-    <button class="btn" onclick="importData()">インポート</button>
-    <button class="btn" onclick="exportJSON()">JSON保存</button>
+    <button class="btn" onclick="importData()">PCから読込</button>
+    <button class="btn" onclick="exportJSON()">PCに保存</button>
     <div class="header-sep"></div>
     <button class="btn btn-save" onclick="openSaveModal()">新規保存</button>
     <button class="btn btn-save" id="updateBtn" style="display:none;background:#5b21b6;border-color:#5b21b6" onclick="confirmOverwrite()">上書き更新</button>
@@ -975,7 +975,6 @@ let activeFilter = 'all';
 let connCtxId = null, connEditId = null;
 let connEditColor = '#4a7bd4';
 let connSelectedId = null;
-let connDrag = null; // {connId, part:'from'|'to'|'mid', startX, startY, origX1,origY1,origX2,origY2}
 
 /* ══════════════════════════════════
    STORAGE
@@ -1602,7 +1601,6 @@ function startDrag(el, cx, cy, type) {
   el.classList.add('dragging');
 }
 function onMM(e) {
-  if (connDrag) return doConnDrag(e.clientX, e.clientY);
   if (isResizing) return doResize(e.clientX, e.clientY);
   if (!isDragging || !dragEl) return;
   const cv = document.getElementById('canvas'), cr = cv.getBoundingClientRect();
@@ -1610,7 +1608,6 @@ function onMM(e) {
   dragEl.style.top  = Math.max(0, e.clientY - cr.top  - dragOffsetY + cv.scrollTop)  + 'px';
 }
 function onMU() {
-  if (connDrag) return endConnDrag();
   if (isResizing) return endResize();
   if (!isDragging || !dragEl) return;
   isDragging = false; dragEl.classList.remove('dragging');
@@ -1619,7 +1616,6 @@ function onMU() {
   dragEl = null;
 }
 function onTM(e) {
-  if (connDrag) { e.preventDefault(); return doConnDrag(e.touches[0].clientX, e.touches[0].clientY); }
   if (isResizing) { e.preventDefault(); return doResize(e.touches[0].clientX, e.touches[0].clientY); }
   if (!isDragging || !dragEl) return; e.preventDefault();
   const t = e.touches[0], cv = document.getElementById('canvas'), cr = cv.getBoundingClientRect();
@@ -1628,7 +1624,6 @@ function onTM(e) {
   if (dragType === 'sc') renderConnectors();
 }
 function onTE() {
-  if (connDrag) return endConnDrag();
   if (isResizing) return endResize();
   if (!isDragging || !dragEl) return;
   isDragging = false; dragEl.classList.remove('dragging');
@@ -1999,17 +1994,25 @@ function renderConnectors() {
       addConnDrag(h2, c.id, 'p2');
     }
 
-    // 線のヒットエリアクリック → 選択
+    // ヒットエリアクリック・ドラッグ（選択 + 移動を同時に処理）
     hit.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
       e.stopPropagation(); e.preventDefault();
       if (connDragId !== null) return;
+      const conn = (state.connections||[]).find(x=>x.id===c.id); if(!conn) return;
       connSelectedId = c.id;
-      renderConnectors();
+      connDragId=c.id; connDragType='move';
+      connDragSX=e.clientX; connDragSY=e.clientY;
+      const pos = resolvedConn(conn);
+      conn.x1=pos.x1; conn.y1=pos.y1; conn.x2=pos.x2; conn.y2=pos.y2;
+      conn.snap1=null; conn.snap2=null;
+      connDragOX1=conn.x1; connDragOY1=conn.y1; connDragOX2=conn.x2; connDragOY2=conn.y2;
+      // DOM再構築せず選択ハイライトだけ更新
+      document.querySelectorAll('#connLines .conn-group').forEach(g2 =>
+        g2.classList.toggle('conn-selected', g2.dataset.cid == c.id));
     });
 
-    // 線全体ドラッグ（選択中のみ）
-    if (sel) addConnDrag(hit, c.id, 'move');
+    // 線全体ドラッグはmousedownで統合処理済み（addConnDragは端点のみ）
 
     // 右クリック
     grp.addEventListener('contextmenu', e => {
@@ -2058,7 +2061,6 @@ function addConnDrag(el, cid, type) {
     const c = (state.connections||[]).find(x=>x.id===cid); if(!c) return;
     connDragId=cid; connDragType=type;
     connDragSX=cx; connDragSY=cy;
-    // ドラッグ開始時、スナップを一時解除して座標を実値に
     const pos = resolvedConn(c);
     c.x1=pos.x1; c.y1=pos.y1; c.x2=pos.x2; c.y2=pos.y2;
     if (type==='p1') c.snap1=null;
@@ -2066,7 +2068,9 @@ function addConnDrag(el, cid, type) {
     if (type==='move') { c.snap1=null; c.snap2=null; }
     connDragOX1=c.x1; connDragOY1=c.y1; connDragOX2=c.x2; connDragOY2=c.y2;
     connSelectedId = cid;
-    renderConnectors();
+    // ドラッグ開始時はDOM再構築せず選択表示だけ更新
+    document.querySelectorAll('#connLines .conn-group').forEach(g =>
+      g.classList.toggle('conn-selected', g.dataset.cid == cid));
   };
   el.addEventListener('mousedown', e => { if(e.button!==0) return; e.stopPropagation(); e.preventDefault(); start(e.clientX,e.clientY); });
   el.addEventListener('touchstart', e => { e.stopPropagation(); e.preventDefault(); start(e.touches[0].clientX,e.touches[0].clientY); },{passive:false});
