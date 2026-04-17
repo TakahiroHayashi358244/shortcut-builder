@@ -137,8 +137,10 @@ input,textarea,select{font-family:inherit}
 .pin-display{
   font-family:'DM Mono',monospace;font-size:12px;font-weight:600;
   padding:5px 11px;background:var(--bg3);border:1px solid var(--border);
-  border-radius:7px;color:var(--accent);letter-spacing:2px;
+  border-radius:7px;color:var(--text3);letter-spacing:1px;
+  white-space:nowrap;
 }
+.pin-display.active{color:var(--accent);letter-spacing:2px;border-color:var(--accent);background:rgba(74,123,212,.08)}
 
 .input{
   width:100%;background:var(--bg3);border:1px solid var(--border);
@@ -494,7 +496,7 @@ textarea.input{resize:vertical;line-height:1.65}
     <button class="btn btn-save" onclick="openSaveModal()">新規保存</button>
     <button class="btn btn-save" id="updateBtn" style="display:none;background:#5b21b6;border-color:#5b21b6" onclick="confirmOverwrite()">上書き更新</button>
     <button class="btn btn-load" onclick="openLoadModal()">クラウド読込</button>
-    <span id="currentPin" class="pin-display" style="display:none"></span>
+    <span id="currentPin" class="pin-display">PINコード未設定</span>
     <button class="btn btn-icon" onclick="openSettingsModal()" title="設定" style="color:var(--text2);font-size:16px">⚙</button>
   </div>
 </div>
@@ -718,6 +720,17 @@ textarea.input{resize:vertical;line-height:1.65}
       </div>
     </div>
   </div>
+  <!-- アップデート -->
+  <div class="form-group" style="margin-top:14px">
+    <label style="font-weight:600;color:var(--text);font-size:12px">アップデート</label>
+    <div style="margin-top:8px;padding:12px;background:var(--bg3);border-radius:var(--r-sm);border:1px solid var(--border);display:flex;flex-direction:column;gap:8px">
+      <p style="font-size:11px;color:var(--text2);line-height:1.6">ショートカットデータを引き継いだまま、最新版に更新します。</p>
+      <button class="btn btn-sm" id="updateBtn2" onclick="doAppUpdate()" style="background:#b45309;border-color:#b45309;color:#fff;justify-content:center">
+        🔄 最新版に更新
+      </button>
+      <div id="updateStatus" style="font-size:11px;color:var(--text2);min-height:16px;text-align:center"></div>
+    </div>
+  </div>
   <div class="modal-actions">
     <button class="btn btn-sm" onclick="closeSettingsModal()">キャンセル</button>
     <button class="btn btn-primary btn-sm" onclick="saveSettings()">保存</button>
@@ -744,9 +757,29 @@ textarea.input{resize:vertical;line-height:1.65}
 
 <!-- Cloud Load -->
 <div class="overlay" id="loadOverlay" onclick="closeOnBg(event,'loadOverlay')">
-<div class="modal" style="text-align:center">
-  <h2>マイレイアウトを読み込み</h2>
-  <p style="font-size:12px;color:var(--text2);margin-bottom:4px">保存時の4桁PINを入力</p>
+<div class="modal" style="max-width:420px">
+  <h2 style="margin-bottom:16px">マイレイアウトを読み込み</h2>
+
+  <!-- PIN一覧 -->
+  <div id="pinListSection">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span style="font-size:12px;font-weight:600;color:var(--text2)">保存済みPIN一覧</span>
+      <button class="btn btn-sm btn-ghost" onclick="fetchPinList()" id="pinListRefreshBtn" style="font-size:11px;padding:4px 10px">🔄 更新</button>
+    </div>
+    <div id="pinListArea" style="min-height:60px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;margin-bottom:12px">
+      <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:8px">「更新」を押して一覧を取得</p>
+    </div>
+  </div>
+
+  <!-- 区切り -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+    <span style="font-size:11px;color:var(--text3)">または直接入力</span>
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+  </div>
+
+  <!-- PIN手動入力 -->
+  <p style="font-size:12px;color:var(--text2);margin-bottom:8px;text-align:center">4桁PINを入力</p>
   <div class="pin-group" id="loadPinGroup">
     <input class="pin-digit" maxlength="1" inputmode="numeric">
     <input class="pin-digit" maxlength="1" inputmode="numeric">
@@ -754,7 +787,7 @@ textarea.input{resize:vertical;line-height:1.65}
     <input class="pin-digit" maxlength="1" inputmode="numeric">
   </div>
   <div class="pin-status" id="loadStatus"></div>
-  <div class="modal-actions center">
+  <div class="modal-actions center" style="margin-top:12px">
     <button class="btn btn-sm" onclick="closeLoadModal()">キャンセル</button>
     <button class="btn btn-load btn-sm" id="loadBtn" onclick="doCloudLoad()">読み込む</button>
   </div>
@@ -997,6 +1030,7 @@ function syncConnDefault(key, val) {
 
 function openSettingsModal() {
   document.getElementById('gasUrlInput').value = GAS_URL;
+  document.getElementById('updateStatus').textContent = '';
   buildBgPicker('bgPickerModal', state.canvasBg, c => {
     state.canvasBg = c; applyBg(); save();
     buildBgPicker('bgPickerModal', state.canvasBg, arguments.callee);
@@ -1022,6 +1056,36 @@ function saveSettings() {
   save();
   closeSettingsModal(); toast('設定を保存しました');
 }
+
+const UPDATE_URL = 'https://takahirohayashi358244.github.io/shortcut-builder/';
+
+async function doAppUpdate() {
+  const btn = document.getElementById('updateBtn2');
+  btn.disabled = true;
+  setUpdateStatus('取得中…', 'loading');
+  try {
+    const res = await fetch(UPDATE_URL + '?_=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const newHtml = await res.text();
+    if (!newHtml.includes('<html') || !newHtml.includes('Shortcut Builder')) {
+      throw new Error('有効なShortcut BuilderのHTMLではありません');
+    }
+    setUpdateStatus('取得完了。データを引き継いでリロードします…', 'success');
+    setTimeout(() => {
+      document.open();
+      document.write(newHtml);
+      document.close();
+    }, 1200);
+  } catch(e) {
+    setUpdateStatus('エラー: ' + e.message, 'error');
+    btn.disabled = false;
+  }
+}
+function setUpdateStatus(msg, type) {
+  const el = document.getElementById('updateStatus');
+  el.textContent = msg;
+  el.style.color = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--success)' : 'var(--accent)';
+}
 function applyBg() {
   document.getElementById('canvas').style.background = state.canvasBg || '#0c0e14';
 }
@@ -1039,8 +1103,10 @@ function newWithSave() { closeNewConfirm(); if (currentPin) { doCloudUpdate().th
 function newWithoutSave() { closeNewConfirm(); resetLayout(); }
 function resetLayout() {
   state.shortcuts = []; state.frames = []; state.connections = []; state.nextId = 1; state.nextFrameId = 1; state.nextConnId = 1;
+  state.canvasBg = '#f5f0e8';
+  applyBg();
   currentPin = null;
-  document.getElementById('currentPin').style.display = 'none';
+  const _cp=document.getElementById('currentPin'); _cp.textContent='PINコード未設定'; _cp.classList.remove('active');
   document.getElementById('updateBtn').style.display = 'none';
   save(); renderCanvas(); updateCount(); toast('新規レイアウトを作成しました');
 }
@@ -1092,8 +1158,7 @@ async function doCloudSave() {
     const json = await res.json();
     if (json.success) {
       currentPin = pin;
-      document.getElementById('currentPin').textContent = 'PIN: ' + pin;
-      document.getElementById('currentPin').style.display = 'inline-block';
+      const _cp=document.getElementById('currentPin'); _cp.textContent='PIN: '+pin; _cp.classList.add('active');
       document.getElementById('updateBtn').style.display = 'inline-flex';
       setStatus('saveStatus', json.message, 'success');
       toast('保存しました (PIN: '+pin+')');
@@ -1125,10 +1190,53 @@ function openLoadModal() {
   if (!GAS_URL) { toast('API URL未設定です（⚙設定から入力）','error'); return; }
   clearPin('loadPinGroup');
   document.getElementById('loadStatus').textContent = '';
+  document.getElementById('pinListArea').innerHTML = '<p style="font-size:12px;color:var(--text3);text-align:center;padding:8px">読み込み中…</p>';
   document.getElementById('loadOverlay').classList.add('open');
   setTimeout(() => document.getElementById('loadPinGroup').querySelector('.pin-digit').focus(), 100);
+  fetchPinList();
 }
 function closeLoadModal() { document.getElementById('loadOverlay').classList.remove('open'); }
+
+async function fetchPinList() {
+  if (!GAS_URL) return;
+  const btn = document.getElementById('pinListRefreshBtn');
+  if (btn) btn.disabled = true;
+  const area = document.getElementById('pinListArea');
+  area.innerHTML = '<p style="font-size:12px;color:var(--text3);text-align:center;padding:8px">取得中…</p>';
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'list' })
+    });
+    const json = await res.json();
+    if (json.success && json.pins && json.pins.length > 0) {
+      area.innerHTML = '';
+      json.pins.forEach(item => {
+        const row = document.createElement('button');
+        row.className = 'btn btn-ghost btn-sm';
+        row.style.cssText = 'width:100%;justify-content:space-between;margin-bottom:5px;font-family:"DM Mono",monospace';
+        const updated = item.updated ? new Date(item.updated).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+        row.innerHTML = `<span style="font-size:14px;font-weight:700;letter-spacing:2px;color:var(--accent)">${item.pin}</span><span style="font-size:10px;color:var(--text3)">${updated}</span>`;
+        row.onclick = () => {
+          // PIN桁に自動入力
+          const digits = document.getElementById('loadPinGroup').querySelectorAll('.pin-digit');
+          item.pin.split('').forEach((ch, i) => { if (digits[i]) digits[i].value = ch; });
+          // 即時読込
+          doCloudLoad();
+        };
+        area.appendChild(row);
+      });
+    } else if (json.success && (!json.pins || json.pins.length === 0)) {
+      area.innerHTML = '<p style="font-size:12px;color:var(--text3);text-align:center;padding:8px">保存済みデータなし</p>';
+    } else {
+      area.innerHTML = `<p style="font-size:12px;color:var(--danger);text-align:center;padding:8px">${json.error||'取得失敗'}</p>`;
+    }
+  } catch(e) {
+    area.innerHTML = '<p style="font-size:12px;color:var(--danger);text-align:center;padding:8px">通信エラー</p>';
+  }
+  if (btn) btn.disabled = false;
+}
 
 async function doCloudLoad() {
   const pin = getPin('loadPinGroup');
@@ -1147,8 +1255,7 @@ async function doCloudLoad() {
       state.shortcuts = (state.shortcuts||[]).map(s => ({memo:'', ...s}));
       applyBg(); save(); populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount();
       currentPin = pin;
-      document.getElementById('currentPin').textContent = 'PIN: ' + pin;
-      document.getElementById('currentPin').style.display = 'inline-block';
+      const _cp=document.getElementById('currentPin'); _cp.textContent='PIN: '+pin; _cp.classList.add('active');
       document.getElementById('updateBtn').style.display = 'inline-flex';
       setStatus('loadStatus','読み込み完了','success');
       toast('読み込みました');
