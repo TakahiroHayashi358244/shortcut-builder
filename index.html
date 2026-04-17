@@ -1001,6 +1001,7 @@ function loadState() {
     if (!state.connections) state.connections = [];
     if (!state.nextConnId) state.nextConnId = 1;
     if (!state.connDefault) state.connDefault = { color:'#4a7bd4', width:2, arrow:'end' };
+    migrateConnections(state);
   } catch(e) {}
 }
 
@@ -1297,6 +1298,39 @@ async function doRename() {
   } catch(e) { toast('通信エラー','error'); }
 }
 
+// 旧形式コネクタ（from/to）を新形式（x1/y1/x2/y2）に変換
+function migrateConnections(st) {
+  if (!st.connections) { st.connections = []; return; }
+  if (!st.nextConnId) st.nextConnId = 1;
+  st.connections = st.connections.map(c => {
+    // 旧形式: { id, from, to, color, width, arrow }
+    if (c.from !== undefined && c.to !== undefined && c.x1 === undefined) {
+      const a = (st.shortcuts||[]).find(s => s.id === c.from);
+      const b = (st.shortcuts||[]).find(s => s.id === c.to);
+      const ax = a ? a.x + (a.w||140)/2 : 100;
+      const ay = a ? a.y + (a.h||140)/2 : 100;
+      const bx = b ? b.x + (b.w||140)/2 : 300;
+      const by = b ? b.y + (b.h||140)/2 : 100;
+      return {
+        id:    c.id,
+        x1: ax, y1: ay, x2: bx, y2: by,
+        snap1: a ? c.from : null,
+        snap2: b ? c.to   : null,
+        color: c.color || '#4a7bd4',
+        width: c.width || 2,
+        arrow: c.arrow || 'end'
+      };
+    }
+    // 新形式はそのまま（snap1/snap2未定義の場合は補完）
+    if (c.snap1 === undefined) c.snap1 = null;
+    if (c.snap2 === undefined) c.snap2 = null;
+    return c;
+  });
+  // nextConnIdを最大IDより大きく設定
+  const maxId = st.connections.reduce((m, c) => Math.max(m, c.id||0), 0);
+  if (st.nextConnId <= maxId) st.nextConnId = maxId + 1;
+}
+
 async function doCloudLoad() {
   const pin = getPin('loadPinGroup');
   if (pin.length !== 4) { setStatus('loadStatus','4桁入力してください','error'); return; }
@@ -1312,6 +1346,8 @@ async function doCloudLoad() {
       if (!state.canvasBg) state.canvasBg = '#0c0e14';
       // migrate memo
       state.shortcuts = (state.shortcuts||[]).map(s => ({memo:'', ...s}));
+      // migrate connections（旧from/to形式 → 新x1/y1/x2/y2形式）
+      migrateConnections(state);
       applyBg(); save(); populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount();
       currentPin = pin;
       const loadedName = json.name || '';
@@ -2173,6 +2209,14 @@ function applyImport(d) {
     const mf=(state.frames||[]).reduce((m,f)=>Math.max(m,f.id),0);
     d.frames.forEach((f,i)=>{f.id=mf+i+1; state.frames.push(f);});
     state.nextFrameId=(state.frames||[]).reduce((m,f)=>Math.max(m,f.id),0)+1;
+  }
+  if (d.connections) {
+    // インポート前にマイグレーション（d内で処理）
+    const tmpState = { shortcuts: state.shortcuts, connections: d.connections, nextConnId: d.nextConnId||1 };
+    migrateConnections(tmpState);
+    const mc=(state.connections||[]).reduce((m,c)=>Math.max(m,c.id||0),0);
+    tmpState.connections.forEach((c,i)=>{c.id=mc+i+1; (state.connections=state.connections||[]).push(c);});
+    state.nextConnId=(state.connections||[]).reduce((m,c)=>Math.max(m,c.id||0),0)+1;
   }
   save(); populateCatSelects(); renderCanvas(); updateCount(); closeImportModal(); toast('インポートしました');
 }
