@@ -528,6 +528,13 @@ textarea.input{resize:vertical;line-height:1.65}
       <div class="s-section">
         <div class="s-label">アイコン</div>
         <div class="icon-grid" id="iconPicker"></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
+          <input id="iconNumberInput" class="input" type="text" maxlength="4"
+            placeholder="数字（例：1234）"
+            style="font-size:13px;font-family:'DM Mono',monospace;letter-spacing:1px;flex:1"
+            oninput="applyIconNumber(this.value)">
+          <div id="iconNumberPreview" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:11px;font-family:'DM Mono',monospace;font-weight:700;color:var(--text);flex-shrink:0;letter-spacing:0"></div>
+        </div>
       </div>
       <div class="s-section">
         <div class="form-row"><label>ボタンサイズ: <span id="sizeLabel">140</span>px</label><input type="range" class="slider" id="sizeSlider" min="80" max="200" value="140"></div>
@@ -637,7 +644,15 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="form-group"><label>作業名</label><input id="editName" class="input"></div>
   <div class="form-group"><label>URL</label><input id="editUrl" class="input"></div>
   <div class="form-group"><label>カラー</label><div class="color-grid" id="editColorPicker"></div></div>
-  <div class="form-group"><label>アイコン</label><div class="icon-grid" id="editIconPicker"></div></div>
+  <div class="form-group"><label>アイコン</label><div class="icon-grid" id="editIconPicker"></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
+      <input id="editIconNumberInput" class="input" type="text" maxlength="4"
+        placeholder="数字（例：1234）"
+        style="font-size:13px;font-family:'DM Mono',monospace;letter-spacing:1px;flex:1"
+        oninput="applyEditIconNumber(this.value)">
+      <div id="editIconNumberPreview" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:11px;font-family:'DM Mono',monospace;font-weight:700;color:var(--text);flex-shrink:0"></div>
+    </div>
+  </div>
   <div class="form-group"><label>サイズ: <span id="editSizeLabel">120</span>px</label><input type="range" class="slider" id="editSizeSlider" min="80" max="200" value="120"></div>
   <div class="form-group"><label>フォントサイズ: <span id="editFontLabel">14</span>px</label><input type="range" class="slider" id="editFontSlider" min="9" max="22" value="14"></div>
   <!-- Memo -->
@@ -1428,13 +1443,56 @@ function rCP(id, act, cb) {
 }
 function rIP(id, act, cb) {
   const el = document.getElementById(id); el.innerHTML = '';
+  // アイコン選択時に対応する数字入力欄をクリア
+  const numInputId = id === 'iconPicker' ? 'iconNumberInput' : id === 'editIconPicker' ? 'editIconNumberInput' : null;
+  const numPrevId  = id === 'iconPicker' ? 'iconNumberPreview' : id === 'editIconPicker' ? 'editIconNumberPreview' : null;
   ICONS.forEach(ic => {
     const s = document.createElement('div');
-    s.className = 'icon-opt' + (ic === act ? ' active' : '');
+    // 数字アイコン以外の選択中表示
+    const isNum = act && act.startsWith('#NUM:');
+    s.className = 'icon-opt' + (!isNum && ic === act ? ' active' : '');
     s.textContent = ic;
-    s.onclick = () => cb(ic);
+    s.onclick = () => {
+      if (numInputId) { document.getElementById(numInputId).value = ''; document.getElementById(numPrevId).textContent = ''; }
+      cb(ic);
+    };
     el.appendChild(s);
   });
+}
+
+// 数字アイコンのプレフィックス
+function numIcon(num) { return '#NUM:' + num; }
+function isNumIcon(icon) { return icon && icon.startsWith('#NUM:'); }
+function numIconVal(icon) { return icon ? icon.replace('#NUM:','') : ''; }
+// アイコン表示テキストを返す（数字アイコンの場合は数字を返す）
+function iconDisplay(icon) { return isNumIcon(icon) ? numIconVal(icon) : icon; }
+
+// サイドバー：数字入力適用
+function applyIconNumber(val) {
+  const num = val.replace(/[^\d]/g,'').slice(0,4);
+  document.getElementById('iconNumberInput').value = num;
+  const prev = document.getElementById('iconNumberPreview');
+  prev.textContent = num || '';
+  prev.style.fontSize = num.length >= 4 ? '9px' : num.length >= 3 ? '10px' : '12px';
+  if (num) {
+    selIcon = numIcon(num);
+    // 絵文字グリッドの選択を解除
+    document.querySelectorAll('#iconPicker .icon-opt').forEach(e => e.classList.remove('active'));
+    updatePreview();
+  }
+}
+
+// 編集モーダル：数字入力適用
+function applyEditIconNumber(val) {
+  const num = val.replace(/[^\d]/g,'').slice(0,4);
+  document.getElementById('editIconNumberInput').value = num;
+  const prev = document.getElementById('editIconNumberPreview');
+  prev.textContent = num || '';
+  prev.style.fontSize = num.length >= 4 ? '9px' : num.length >= 3 ? '10px' : '12px';
+  if (num) {
+    editIcon = numIcon(num);
+    document.querySelectorAll('#editIconPicker .icon-opt').forEach(e => e.classList.remove('active'));
+  }
 }
 function buildBgPicker(id, act, cb) {
   const el = document.getElementById(id); if (!el) return; el.innerHTML = '';
@@ -1463,7 +1521,12 @@ function updatePreview() {
   p.style.background = `linear-gradient(145deg,${selColor}DD,${selColor}88)`;
   document.getElementById('previewName').textContent = nm;
   document.getElementById('previewName').style.fontSize = fs + 'px';
-  document.getElementById('previewIcon').textContent = selIcon;
+  const iconEl = document.getElementById('previewIcon');
+  iconEl.textContent = iconDisplay(selIcon);
+  iconEl.style.fontSize = isNumIcon(selIcon) ? (numIconVal(selIcon).length >= 4 ? '10px' : '12px') : '20px';
+  iconEl.style.fontFamily = isNumIcon(selIcon) ? "'DM Mono',monospace" : '';
+  iconEl.style.fontWeight = isNumIcon(selIcon) ? '700' : '';
+  iconEl.style.letterSpacing = isNumIcon(selIcon) ? '0' : '';
 }
 
 /* ══════════════════════════════════
@@ -1596,7 +1659,7 @@ function renderCanvas() {
         <button class="sc-action del del-btn" title="削除">✕</button>
       </div>
       <div class="sc-content" style="padding-bottom:${showMemoBar?'50px':'12px'};padding-top:12px">
-        <div class="sc-icon" style="background:${iconBg}">${s.icon}</div>
+        <div class="sc-icon" style="background:${iconBg};font-size:${isNumIcon(s.icon)?(numIconVal(s.icon).length>=4?'10px':'12px'):'20px'};font-family:${isNumIcon(s.icon)?'\'DM Mono\',monospace':''};font-weight:${isNumIcon(s.icon)?'700':''};letter-spacing:0">${iconDisplay(s.icon)}</div>
         <div class="sc-name" style="font-size:${fs}px;text-shadow:${txtShadow}">${esc(s.name)}</div>
         <div class="sc-cat" style="text-shadow:${txtShadow}">${esc(s.category)}</div>
       </div>
@@ -1713,6 +1776,14 @@ function editShortcut(id) {
   editColor = s.color; editIcon = s.icon;
   rCP('editColorPicker', editColor, c => { editColor=c; rCP('editColorPicker', editColor, arguments.callee); });
   rIP('editIconPicker',  editIcon,  i => { editIcon =i; rIP('editIconPicker',  editIcon,  arguments.callee); });
+  // 数字アイコンの場合は入力欄に復元
+  const numInp  = document.getElementById('editIconNumberInput');
+  const numPrev = document.getElementById('editIconNumberPreview');
+  if (isNumIcon(s.icon)) {
+    const num = numIconVal(s.icon);
+    numInp.value = num; numPrev.textContent = num;
+    numPrev.style.fontSize = num.length >= 4 ? '9px' : num.length >= 3 ? '10px' : '12px';
+  } else { numInp.value = ''; numPrev.textContent = ''; }
   syncMemoPreview(); switchMemoTab('edit');
   document.getElementById('editOverlay').classList.add('open');
 }
@@ -1742,8 +1813,11 @@ function openMemoPopup(id, cardEl) {
 
   // populate
   const iconEl = document.getElementById('mpIcon');
-  iconEl.textContent = s.icon;
+  iconEl.textContent = iconDisplay(s.icon);
   iconEl.style.background = hexAlpha(s.color, 0.2);
+  iconEl.style.fontSize = isNumIcon(s.icon) ? (numIconVal(s.icon).length >= 4 ? '10px' : '12px') : '18px';
+  iconEl.style.fontFamily = isNumIcon(s.icon) ? "'DM Mono',monospace" : '';
+  iconEl.style.fontWeight = isNumIcon(s.icon) ? '700' : '';
   document.getElementById('mpName').textContent = s.name;
   document.getElementById('mpBody').innerHTML = renderMd(s.memo||'');
 
@@ -1791,8 +1865,11 @@ function openMemoView(id) {
   const s = state.shortcuts.find(x=>x.id===id); if(!s) return;
   memoViewId = id;
   const iconEl = document.getElementById('memoViewIcon');
-  iconEl.textContent = s.icon;
+  iconEl.textContent = iconDisplay(s.icon);
   iconEl.style.background = hexAlpha(s.color, 0.2);
+  iconEl.style.fontSize = isNumIcon(s.icon) ? (numIconVal(s.icon).length >= 4 ? '10px' : '12px') : '20px';
+  iconEl.style.fontFamily = isNumIcon(s.icon) ? "'DM Mono',monospace" : '';
+  iconEl.style.fontWeight = isNumIcon(s.icon) ? '700' : '';
   document.getElementById('memoViewName').textContent = s.name;
   document.getElementById('memoViewCat').textContent  = s.category;
   document.getElementById('memoViewBody').innerHTML   = renderMd(s.memo||'');
