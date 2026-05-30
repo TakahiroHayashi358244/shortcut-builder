@@ -577,7 +577,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0530b</span>
+    <span class="logo-ver">v3 build0530c</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -776,7 +776,8 @@ textarea.input{resize:vertical;line-height:1.65}
 <div class="modal">
   <h2>▦ ボタンを自動整列</h2>
   <p style="font-size:12px;color:var(--text2);line-height:1.8;margin-bottom:14px">
-    キャンバス上のボタンをグループごとに枠で囲い、きれいに並べ替えます。色は変更しません。
+    キャンバス上のボタンをグループごとに枠で囲い、横方向に並べ替えます。<br>
+    ボタンサイズと配置は1画面に収まるよう自動調整されます。色は変更しません。
   </p>
   <div class="form-group">
     <label>グループ分けの基準</label>
@@ -784,10 +785,6 @@ textarea.input{resize:vertical;line-height:1.65}
       <option value="color">ボタンの色ごと</option>
       <option value="category">カテゴリーごと</option>
     </select>
-  </div>
-  <div class="form-group">
-    <label>横に並べる数: <span id="alignColsLabel">4</span> 個</label>
-    <input type="range" class="slider" id="alignColsSlider" min="2" max="8" value="4" oninput="document.getElementById('alignColsLabel').textContent=this.value">
   </div>
   <div class="form-group">
     <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
@@ -1767,41 +1764,96 @@ function updateAlignPreview() {
 
 function applyAlign() {
   const basis = document.getElementById('alignBasis').value;
-  const cols  = parseInt(document.getElementById('alignColsSlider').value);
   const keepFrames = document.getElementById('alignKeepFrames').checked;
   if (!state.shortcuts.length) { toast('整列するボタンがありません','error'); return; }
 
   if (!keepFrames) { state.frames = []; state.nextFrameId = 1; }
 
   const groups = groupedForAlign(basis);
+  const groupArr = [...groups.entries()];   // [ [key, items], ... ]
+  const G = groupArr.length;
 
-  const BTN = 130, GAP = 18;
-  const FRAME_PAD = 26, FRAME_TOP = 44, FRAME_GAP_Y = 70;
-  const START_X = 50, START_Y = 60;
-  let cursorY = START_Y;
+  // 利用可能なキャンバス表示領域
+  const cv = document.getElementById('canvas');
+  const availW = Math.max(360, cv.clientWidth  - 40);
+  const availH = Math.max(320, cv.clientHeight - 40);
 
-  groups.forEach((arr, key) => {
-    const n = arr.length; if (!n) return;
-    const c = Math.min(cols, n);
-    const rows = Math.ceil(n / c);
-    const innerW = c * BTN + (c - 1) * GAP;
-    const innerH = rows * BTN + (rows - 1) * GAP;
-    const frameW = innerW + FRAME_PAD * 2;
-    const frameH = innerH + FRAME_PAD + FRAME_TOP;
-    const frameX = START_X, frameY = cursorY;
+  // レイアウト定数（サイズは自動調整するので基準値）
+  const GAP = 16;            // ボタン間
+  const FRAME_PAD = 22;      // 枠内パディング
+  const FRAME_TOP = 40;      // タブ＋上余白
+  const FRAME_GAP_X = 36;    // 枠どうしの横間隔
+  const FRAME_GAP_Y = 56;    // 枠どうしの縦間隔
+  const START_X = 40, START_Y = 50;
 
-    // 枠の名前と色：カテゴリ基準ならカテゴリ名＋カテゴリ色、色基準なら色名＋その色
-    let frameName, frameColor;
-    if (basis === 'category') {
-      frameName = key;
-      frameColor = frameColorForCat(key);
-    } else {
-      frameName = colorName(key) || 'グループ';
-      frameColor = key;
+  // 各グループの最大要素数（列数決定の基準）
+  const maxItems = Math.max(...groupArr.map(([,a]) => a.length));
+
+  // ボタンサイズBTNとグループ内列数colsPerGroup、枠を横に並べる数framesPerRowを
+  // 1画面に収まるよう探索（大きいサイズから下げていく）
+  function evalLayout(BTN, colsPerGroup, framesPerRow) {
+    // 各グループの枠サイズを算出
+    const frames = groupArr.map(([key, arr]) => {
+      const c = Math.min(colsPerGroup, arr.length);
+      const rows = Math.ceil(arr.length / c);
+      const innerW = c * BTN + (c - 1) * GAP;
+      const innerH = rows * BTN + (rows - 1) * GAP;
+      return { w: innerW + FRAME_PAD*2, h: innerH + FRAME_PAD + FRAME_TOP, key, arr, c };
+    });
+    // 枠を framesPerRow 列で行配置し、各行の高さ・全体幅高さを求める
+    let totalH = START_Y, maxRowW = 0;
+    for (let i = 0; i < frames.length; i += framesPerRow) {
+      const rowFrames = frames.slice(i, i + framesPerRow);
+      const rowW = rowFrames.reduce((s,f)=>s+f.w,0) + (rowFrames.length-1)*FRAME_GAP_X;
+      const rowH = Math.max(...rowFrames.map(f=>f.h));
+      maxRowW = Math.max(maxRowW, rowW);
+      totalH += rowH + FRAME_GAP_Y;
     }
+    const totalW = START_X + maxRowW;
+    return { frames, totalW, totalH, fits: (totalW <= availW + START_X && totalH <= availH + START_Y) };
+  }
+
+  // 探索：BTN 130→70。グループ内も枠配置も「横に広げる」ことを優先するため
+  // colsPerGroup（グループ内列数）と framesPerRow（枠の横並び数）を共に大きい方から試す
+  let chosen = null;
+  const BTN_SIZES = [130, 120, 110, 100, 92, 84, 76, 70];
+  outer:
+  for (const BTN of BTN_SIZES) {
+    for (let fpr = G; fpr >= 1; fpr--) {
+      for (let cpg = maxItems; cpg >= 1; cpg--) {
+        const r = evalLayout(BTN, cpg, fpr);
+        if (r.fits) { chosen = { BTN, cpg, fpr, ...r }; break outer; }
+      }
+    }
+  }
+  // どうやっても収まらない場合：最小サイズ・横全並びで配置（スクロール許容）
+  if (!chosen) {
+    const BTN = 70;
+    const cpg = Math.max(1, Math.min(maxItems, Math.floor((availW - START_X) / (BTN + GAP))));
+    const r = evalLayout(BTN, cpg, Math.max(1, G));
+    chosen = { BTN, cpg, fpr: Math.max(1, G), ...r };
+  }
+
+  const { BTN, cpg: colsPerGroup, fpr: framesPerRow, frames } = chosen;
+
+  // 実配置：枠を framesPerRow 列で左→右、行が変わったら下へ
+  let cursorX = START_X, cursorY = START_Y, rowMaxH = 0, inRow = 0;
+  frames.forEach((fr) => {
+    const { key, arr, c } = fr;
+    if (inRow === framesPerRow) { // 改行
+      cursorX = START_X;
+      cursorY += rowMaxH + FRAME_GAP_Y;
+      rowMaxH = 0; inRow = 0;
+    }
+    const frameX = cursorX, frameY = cursorY;
+
+    let frameName, frameColor;
+    if (basis === 'category') { frameName = key; frameColor = frameColorForCat(key); }
+    else { frameName = colorName(key) || 'グループ'; frameColor = key; }
+
     state.frames.push({
       id: state.nextFrameId++, name: frameName, color: frameColor,
-      borderWidth: 3, bgOpacity: 8, x: frameX, y: frameY, w: frameW, h: frameH
+      borderWidth: 3, bgOpacity: 8, x: frameX, y: frameY, w: fr.w, h: fr.h
     });
 
     arr.forEach((s, idx) => {
@@ -1811,13 +1863,14 @@ function applyAlign() {
       s.w = BTN; s.h = BTN;
     });
 
-    cursorY = frameY + frameH + FRAME_GAP_Y;
+    cursorX += fr.w + FRAME_GAP_X;
+    rowMaxH = Math.max(rowMaxH, fr.h);
+    inRow++;
   });
 
-  // コネクタはスナップ済みのものは追従するので位置だけ再計算
   save(); renderCanvas(); updateCount();
   closeAlignModal();
-  toast(`${groups.size}グループに整列しました`);
+  toast(`${G}グループを整列しました`);
 }
 
 function downloadExcelTemplate() {
