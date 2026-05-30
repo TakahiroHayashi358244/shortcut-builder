@@ -280,6 +280,12 @@ textarea.input{resize:vertical;line-height:1.65}
   border-radius:16px 16px 50% 50%/16px 16px 22px 22px;
   pointer-events:none;z-index:2;
 }
+/* 編集モーダルのプレビューは光沢なしのフラット表示（文字サイズ確認に集中できるように） */
+#editPreviewBtn{
+  border-radius:14px;border:1px solid rgba(0,0,0,.12);
+  box-shadow:0 2px 8px rgba(0,0,0,.12);
+}
+#editPreviewBtn::before{ display:none; }
 /* memo badge on canvas */
 .sc-btn .sc-memo-dot{position:absolute;top:5px;left:5px;width:7px;height:7px;border-radius:50%;background:var(--accent);opacity:.8;z-index:6}
 /* action buttons */
@@ -577,7 +583,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0531c</span>
+    <span class="logo-ver">v3 build0531d</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -697,7 +703,6 @@ textarea.input{resize:vertical;line-height:1.65}
 <div class="ctx-menu" id="ctxMenu">
   <button class="ctx-item" onclick="ctxOpen()">開く</button>
   <button class="ctx-item" onclick="ctxEdit()">編集</button>
-  <button class="ctx-item" onclick="ctxMemo()">メモを編集</button>
   <button class="ctx-item" onclick="ctxDuplicate()">複製</button>
   <button class="ctx-item danger" onclick="ctxDelete()">削除</button>
 </div>
@@ -803,7 +808,7 @@ textarea.input{resize:vertical;line-height:1.65}
       <button class="memo-tab active" id="memoEditTab" onclick="switchMemoTab('edit')">✏️ 編集</button>
       <button class="memo-tab" id="memoPreviewTab" onclick="switchMemoTab('preview')">👁 プレビュー</button>
     </div>
-    <textarea id="editMemo" class="input" rows="5" placeholder="作業手順やメモを記入…&#10;Markdown使用可: # 見出し  - リスト  **太字**  `コード`" oninput="syncMemoPreview()"></textarea>
+    <textarea id="editMemo" class="input" rows="5" placeholder="作業手順やメモを記入…&#10;Markdown使用可: # 見出し  - リスト  **太字**  `コード`" oninput="syncMemoPreview();updateEditPreview()"></textarea>
     <div class="memo-preview" id="memoPreviewPane" style="display:none"></div>
     <div class="memo-hint" style="margin-top:5px"><code>#</code> 見出し &nbsp;<code>-</code> リスト &nbsp;<code>**太字**</code> &nbsp;<code>`コード`</code> &nbsp;<code>---</code> 区切り</div>
   </div>
@@ -1948,7 +1953,10 @@ function updateEditPreview() {
   const nm = document.getElementById('editName').value || '作業名';
   const sz = parseInt(document.getElementById('editSizeSlider').value);
   const fs = parseInt(document.getElementById('editFontSlider').value);
-  const pv = Math.min(sz, 140);
+  // 実ボタンと同じ寸法で表示（モーダル幅に収まるよう最大220pxにクランプし、その時はフォントも同比率で縮小）
+  const cap = 220;
+  const scale = sz > cap ? cap / sz : 1;
+  const pv = Math.round(sz * scale);
   p.style.width = pv + 'px'; p.style.height = pv + 'px';
   p.style.background = `linear-gradient(to bottom,${editColor},${editColor}C8 55%,${editColor}9E)`;
   const nameEl = document.getElementById('editPreviewName');
@@ -1956,8 +1964,11 @@ function updateEditPreview() {
   nameEl.style.color = light ? '#1a1a2e' : '#fff';
   nameEl.style.textShadow = light ? '0 1px 2px rgba(0,0,0,.1)' : '0 1px 3px rgba(0,0,0,.4)';
   nameEl.textContent = nm;
-  const scaledMax = Math.max(10, Math.round(fs * pv / sz));
-  fitName(nameEl, pv, pv, scaledMax, false);
+  // メモバーの有無を実ボタンと同条件で反映（メモあり かつ サイズ>=100 でバーが出る→表示領域が減る）
+  const memoVal = (document.getElementById('editMemo').value || '');
+  const memoPlain = memoVal.replace(/^#{1,3} /gm,'').replace(/\*\*/g,'').replace(/\*/g,'').replace(/`/g,'').replace(/^[-*] /gm,'').replace(/^\d+\. /gm,'').trim();
+  const hasMemoBar = memoPlain.length > 0 && sz >= 100;
+  fitName(nameEl, pv, pv, Math.round(fs * scale), hasMemoBar);
 }
 
 /* ══════════════════════════════════
@@ -2085,7 +2096,6 @@ function renderCanvas() {
       <div class="link-zone"></div>
       <div class="sc-actions">
         <button class="sc-action edit-btn" title="編集">✎</button>
-        <button class="sc-action memo-btn" title="メモ">📝</button>
         <button class="sc-action del del-btn" title="削除">✕</button>
       </div>
       <div class="sc-content" style="padding-bottom:${showMemoBar?'46px':'10px'};padding-top:10px">
@@ -2105,7 +2115,6 @@ function renderCanvas() {
     el.querySelector('.link-zone').addEventListener('click', e => { e.stopPropagation(); if(s.url) window.open(s.url,'_blank','noopener,noreferrer'); });
     el.querySelector('.link-zone').addEventListener('touchend', e => { if(!isDragging && s.url){ e.preventDefault(); window.open(s.url,'_blank','noopener,noreferrer'); } });
     el.querySelector('.edit-btn').addEventListener('click', e => { e.stopPropagation(); editShortcut(s.id); });
-    el.querySelector('.memo-btn').addEventListener('click', e => { e.stopPropagation(); openMemoModal(s.id); });
     if (showMemoBar) {
       el.querySelector('.sc-memo-preview').addEventListener('click', e => { e.stopPropagation(); openMemoPopup(s.id, el); });
     }
@@ -2321,7 +2330,7 @@ function closeMemoPopup() {
   memoPopupId = null;
   document.removeEventListener('click', onPopupOutside);
 }
-function editFromPopup()  { closeMemoPopup(); openMemoModal(memoPopupId); }
+function editFromPopup()  { const id=memoPopupId; closeMemoPopup(); editShortcut(id); }
 function openFromPopup()  { const s = state.shortcuts.find(x=>x.id===memoPopupId); if (s && s.url) window.open(s.url,'_blank','noopener,noreferrer'); }
 
 /* ══════════════════════════════════
@@ -2339,7 +2348,7 @@ function openMemoView(id) {
   document.getElementById('memoViewBody').innerHTML   = renderMd(s.memo||'');
   document.getElementById('memoViewOverlay').classList.add('open');
 }
-function openMemoEditFromView() { document.getElementById('memoViewOverlay').classList.remove('open'); openMemoModal(memoViewId); }
+function openMemoEditFromView() { const id=memoViewId; document.getElementById('memoViewOverlay').classList.remove('open'); editShortcut(id); }
 function openMemoViewUrl() { const s = state.shortcuts.find(x=>x.id===memoViewId); if (s) window.open(s.url,'_blank','noopener,noreferrer'); }
 
 /* ══════════════════════════════════
