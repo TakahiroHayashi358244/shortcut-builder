@@ -22,7 +22,7 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:14px}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow:hidden}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
 button{cursor:pointer;font-family:inherit}
 input,textarea,select{font-family:inherit}
 ::-webkit-scrollbar{width:5px;height:5px}
@@ -33,10 +33,10 @@ input,textarea,select{font-family:inherit}
    LAYOUT
 ══════════════════════════════════ */
 .header{
-  height:52px;background:var(--bg2);
+  min-height:52px;background:var(--bg2);
   border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:10px;padding:0 16px;
-  position:relative;z-index:100;
+  display:flex;align-items:center;gap:10px;padding:6px 16px;
+  position:relative;z-index:100;flex-shrink:0;flex-wrap:wrap;
 }
 .logo{display:flex;align-items:center;gap:9px;flex-shrink:0}
 .logo-mark{width:28px;height:28px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
@@ -44,16 +44,16 @@ input,textarea,select{font-family:inherit}
 .logo-ver{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-left:2px}
 .header-sep{width:1px;height:22px;background:var(--border2);margin:0 4px;flex-shrink:0}
 .header-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.header-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 
-.app{display:flex;height:calc(100vh - 52px)}
+.app{display:flex;flex:1;min-height:0}
 
 /* ── Sidebar ── */
 .sidebar{
   width:290px;min-width:290px;background:var(--bg2);
   border-right:1px solid var(--border);
   display:flex;flex-direction:column;overflow:hidden;
-  transition:width .28s ease,min-width .28s ease;
+  transition:width .28s ease,min-width .28s ease,max-height .28s ease;
   position:relative;z-index:50;
 }
 .sidebar.collapsed{width:0;min-width:0}
@@ -133,6 +133,10 @@ input,textarea,select{font-family:inherit}
 .btn-excel:hover{background:#0f5d39}
 .btn-align{background:#7c3aed;border-color:#7c3aed;color:#fff}
 .btn-align:hover{background:#6d28d9}
+.btn-create{background:linear-gradient(135deg,#4a7bd4,#6c5ce7);border-color:transparent;color:#fff;font-weight:600}
+.btn-create:hover{opacity:.9}
+.btn-create-close{background:var(--bg4);border-color:var(--border2);color:var(--text2);font-weight:500}
+.btn-create-close:hover{background:var(--bg3);opacity:1}
 .btn-danger{background:rgba(245,101,101,.12);border-color:rgba(245,101,101,.3);color:var(--danger)}
 .btn-danger:hover{background:rgba(245,101,101,.22)}
 .btn-sm{padding:5px 10px;font-size:11px}
@@ -551,11 +555,19 @@ textarea.input{resize:vertical;line-height:1.65}
    RESPONSIVE
 ══════════════════════════════════ */
 @media(max-width:768px){
+  .app{flex-direction:column}
   .sidebar{width:100%;min-width:unset;max-height:42vh;border-right:none;border-bottom:1px solid var(--border)}
+  .sidebar.collapsed{width:100%;max-height:0;min-height:0;border-bottom:none;overflow:hidden}
   .canvas-wrapper{min-height:58vh}
   .header-actions{gap:3px}
+  .header-right{gap:3px}
   .btn{font-size:11px;padding:5px 9px}
   .logo-name{display:none}
+  .header-sep{display:none}
+}
+@media(max-width:520px){
+  .btn{font-size:10px;padding:5px 7px}
+  .logo-ver{display:none}
 }
 </style>
 </head>
@@ -569,7 +581,8 @@ textarea.input{resize:vertical;line-height:1.65}
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
-    <button class="btn btn-primary" onclick="confirmNewLayout()">＋ 新規作成</button>
+    <button class="btn btn-create" id="createToggleBtn" onclick="toggleCreatePanel()">＋ ボタン作成</button>
+    <button class="btn btn-primary" onclick="confirmNewLayout()">＋ 新規ボード作成</button>
     <button class="btn btn-excel" onclick="openExcelModal()">📥 Excelから一括作成</button>
     <button class="btn btn-align" onclick="openAlignModal()">▦ 整列</button>
     <button class="btn" onclick="manageCats()">カテゴリー管理</button>
@@ -589,7 +602,7 @@ textarea.input{resize:vertical;line-height:1.65}
 <div class="app">
 
   <!-- Sidebar -->
-  <div class="sidebar" id="sidebar">
+  <div class="sidebar collapsed" id="sidebar">
     <div class="sidebar-tabs">
       <button class="sidebar-tab active" onclick="switchTab('sc')">ショートカット</button>
       <button class="sidebar-tab" onclick="switchTab('settings')">設定</button>
@@ -680,7 +693,7 @@ textarea.input{resize:vertical;line-height:1.65}
     </div>
   </div>
   <div class="canvas-wrapper" id="canvasWrapper">
-    <button class="sb-toggle" onclick="toggleSidebar()"><span class="sb-arrow">◀</span></button>
+    <button class="sb-toggle" onclick="toggleSidebar()"><span class="sb-arrow">▶</span></button>
     <div class="cat-tab-bar" id="catTabBar"></div>
     <div class="canvas" id="canvas">
       <svg id="connectorSvg">
@@ -1993,7 +2006,7 @@ function renderCanvas() {
 
   if (!filtered.length && (activeFilter !== 'all' || !(state.frames||[]).length)) {
     const h = document.createElement('div'); h.className = 'empty-hint';
-    h.innerHTML = '<div class="icon">📌</div><p>' + (activeFilter === 'all' ? 'ヘッダーの「＋ 新規作成」「📥 Excelから一括作成」かサイドバーから追加' : 'このカテゴリーにはショートカットがありません') + '</p>';
+    h.innerHTML = '<div class="icon">📌</div><p>' + (activeFilter === 'all' ? 'ヘッダーの「＋ ボタン作成」「📥 Excelから一括作成」から追加' : 'このカテゴリーにはショートカットがありません') + '</p>';
     cv.appendChild(h); renderConnectors(); return;
   }
 
@@ -2632,6 +2645,31 @@ function toggleSidebar() {
   const sb = document.getElementById('sidebar');
   sb.classList.toggle('collapsed');
   document.querySelector('.sb-arrow').textContent = sb.classList.contains('collapsed') ? '▶' : '◀';
+  syncCreateBtn();
+}
+// ヘッダの「ボタン作成」：開いていれば閉じる、閉じていれば開いて作成タブ表示
+function toggleCreatePanel() {
+  const sb = document.getElementById('sidebar');
+  const willOpen = sb.classList.contains('collapsed');
+  if (willOpen) {
+    sb.classList.remove('collapsed');
+    document.querySelector('.sb-arrow').textContent = '◀';
+    switchTab('sc');
+    setTimeout(() => { const n=document.getElementById('scName'); if(n) n.focus(); }, 60);
+  } else {
+    sb.classList.add('collapsed');
+    document.querySelector('.sb-arrow').textContent = '▶';
+  }
+  syncCreateBtn();
+}
+// サイドバーの開閉状態に応じてヘッダボタンのラベルを更新
+function syncCreateBtn() {
+  const sb = document.getElementById('sidebar');
+  const btn = document.getElementById('createToggleBtn');
+  if (!btn) return;
+  const open = !sb.classList.contains('collapsed');
+  btn.textContent = open ? '✕ 閉じる' : '＋ ボタン作成';
+  btn.classList.toggle('btn-create-close', open);
 }
 function switchTab(tab) {
   document.querySelectorAll('.sidebar-tab').forEach((t,i)=>t.classList.toggle('active', (i===0&&tab==='sc')||(i===1&&tab==='settings')));
@@ -2667,6 +2705,7 @@ function init() {
     applyPopupSettings();
   } catch(e) {}
   populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount(); updatePreview();
+  syncCreateBtn();
   setupPin('savePinGroup'); setupPin('loadPinGroup');
 
   document.getElementById('scName').addEventListener('input', updatePreview);
