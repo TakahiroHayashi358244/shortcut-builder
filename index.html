@@ -577,7 +577,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0531a</span>
+    <span class="logo-ver">v3 build0531b</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -727,8 +727,8 @@ textarea.input{resize:vertical;line-height:1.65}
   </div>
   <div style="font-size:11px;color:var(--text2);line-height:1.8;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:12px">
     必須列: <strong>カテゴリー</strong> / <strong>名称</strong> / <strong>URL</strong><br>
-    任意列: メモ・カラー<br>
-    同じカテゴリーは自動でグループ枠にまとめられます。
+    任意列: メモ<br>
+    同じカテゴリーは自動でグループ枠にまとめられ、色はカテゴリーごとに自動で割り当てられます。
   </div>
 
   <div id="excelPreviewArea" style="display:none">
@@ -1842,17 +1842,53 @@ function applyAlign() {
 
 function downloadExcelTemplate() {
   if (typeof XLSX === 'undefined') { toast('Excelライブラリ未読込','error'); return; }
+  // シート1: ショートカット入力
   const data = [
     ['カテゴリー','名称','URL','メモ'],
-    ['業務システム','勤怠管理','https://example.com/kintai','# 使い方\n- 毎朝打刻\n- **残業申請**は前日まで'],
+    ['業務システム','勤怠管理','https://example.com/kintai','# 使い方\n- 毎朝出勤時に打刻\n- **残業申請**は前日までに'],
     ['業務システム','シフト表','https://example.com/shift',''],
+    ['業務システム','日報入力','https://example.com/nippo','当日中に提出'],
     ['管理ツール','在庫照会','https://example.com/zaiko',''],
-    ['外部サービス','佐川 追跡','https://www.sagawa-exp.co.jp/','返品時に使用']
+    ['管理ツール','ロケ検索','https://example.com/loca',''],
+    ['外部サービス','佐川 追跡','https://www.sagawa-exp.co.jp/','返品時に使用'],
+    ['外部サービス','ヤマト 追跡','https://www.kuronekoyamato.co.jp/','']
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{wch:14},{wch:18},{wch:32},{wch:30}];
+  ws['!cols'] = [{wch:16},{wch:20},{wch:38},{wch:34}];
+  // シート2: 記入方法
+  const guide = [
+    ['Shortcut Builder 読み込みフォーマット 記入方法'],
+    [''],
+    ['1行目はヘッダー（項目名）です。削除しないでください。'],
+    ['2行目以降に、ボタン1つにつき1行で入力します。'],
+    ['「ショートカット」シートのサンプル行は消して使ってください。'],
+    [''],
+    ['■ 各列の説明'],
+    ['カテゴリー（必須）'],
+    ['  ボタンの分類。同じカテゴリー名はまとめて1つのグループ枠になります。'],
+    ['  色はカテゴリーごとに自動で割り当てられます。'],
+    ['名称（必須）'],
+    ['  ボタンに大きく表示される作業名。'],
+    ['URL（必須）'],
+    ['  クリックで開くリンク先。https:// から入力してください。'],
+    ['メモ（任意）'],
+    ['  作業手順などのメモ。Markdown記法（# 見出し / - リスト / **太字**）が使えます。'],
+    ['  セル内で改行するには Alt+Enter（Mac は Option+Enter）。'],
+    [''],
+    ['■ 読み込み手順'],
+    ['1. このファイルに入力して保存します。'],
+    ['2. Shortcut Builder の「Excelから一括作成」を開きます。'],
+    ['3. このファイルを選択し、内容を確認して「レイアウトを生成」を押します。'],
+    [''],
+    ['■ 補足'],
+    ['  メモ列も不要なら削除して、カテゴリー・名称・URL の3列だけでも読み込めます。'],
+    ['  アプリ側に無いカテゴリー名でもOK。読み込み時に自動で追加されます。']
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(guide);
+  ws2['!cols'] = [{wch:80}];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'shortcuts');
+  XLSX.utils.book_append_sheet(wb, ws, 'ショートカット');
+  XLSX.utils.book_append_sheet(wb, ws2, '記入方法');
   XLSX.writeFile(wb, 'shortcut_template.xlsx');
   toast('テンプレートをダウンロードしました');
 }
