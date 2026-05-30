@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shortcut Builder v2</title>
+<title>Shortcut Builder v3</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ══════════════════════════════════
    TOKENS
@@ -128,6 +129,10 @@ input,textarea,select{font-family:inherit}
 .btn-load:hover{background:#065f46}
 .btn-frame{background:#0e7490;border-color:#0e7490;color:#fff}
 .btn-frame:hover{background:#0c6880}
+.btn-excel{background:#16794a;border-color:#16794a;color:#fff}
+.btn-excel:hover{background:#0f5d39}
+.btn-align{background:#7c3aed;border-color:#7c3aed;color:#fff}
+.btn-align:hover{background:#6d28d9}
 .btn-danger{background:rgba(245,101,101,.12);border-color:rgba(245,101,101,.3);color:var(--danger)}
 .btn-danger:hover{background:rgba(245,101,101,.22)}
 .btn-sm{padding:5px 10px;font-size:11px}
@@ -159,6 +164,19 @@ textarea.input{resize:vertical;line-height:1.65}
 .s-label{font-size:10px;font-weight:600;letter-spacing:1.1px;text-transform:uppercase;color:var(--text3);margin-bottom:9px}
 .form-row{margin-bottom:10px}
 .form-row label{display:block;font-size:11px;color:var(--text2);font-weight:500;margin-bottom:5px}
+
+/* 詳細設定の折りたたみ */
+.adv-toggle{
+  display:flex;align-items:center;justify-content:space-between;
+  width:100%;background:none;border:none;color:var(--text2);
+  font-size:11px;font-weight:600;letter-spacing:.5px;cursor:pointer;
+  padding:4px 0;text-transform:uppercase;
+}
+.adv-toggle:hover{color:var(--text)}
+.adv-toggle .adv-arrow{transition:transform .2s;font-size:10px}
+.adv-toggle.open .adv-arrow{transform:rotate(90deg)}
+.adv-body{display:none}
+.adv-body.open{display:block}
 
 /* Color / Icon pickers */
 .color-grid{display:flex;flex-wrap:wrap;gap:5px}
@@ -203,9 +221,8 @@ textarea.input{resize:vertical;line-height:1.65}
 .sc-btn.dragging .drag-zone{cursor:grabbing}
 .sc-btn .link-zone{position:absolute;top:20%;left:20%;right:20%;bottom:20%;cursor:pointer;z-index:5;border-radius:6px;transition:background .15s}
 .sc-btn .link-zone:hover{background:rgba(255,255,255,.09)}
-.sc-btn .sc-content{position:relative;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;pointer-events:none;width:100%;height:100%;padding:12px 8px}
-.sc-btn .sc-icon{font-size:20px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px}
-.sc-btn .sc-name{font-weight:700;text-align:center;line-height:1.3;word-break:break-word;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sc-btn .sc-content{position:relative;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;pointer-events:none;width:100%;height:100%;padding:10px}
+.sc-btn .sc-name{font-weight:800;text-align:center;line-height:1.2;word-break:break-word;max-width:100%;width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;letter-spacing:-.2px}
 .sc-btn .sc-cat{display:none}
 /* memo badge on canvas */
 .sc-btn .sc-memo-dot{position:absolute;top:5px;left:5px;width:7px;height:7px;border-radius:50%;background:var(--accent);opacity:.8;z-index:6}
@@ -293,6 +310,8 @@ textarea.input{resize:vertical;line-height:1.65}
   font-size:26px;font-weight:700;text-align:center;
   background:var(--bg3);border:2px solid var(--border);
   border-radius:10px;color:var(--accent);outline:none;transition:border-color .2s;
+  -webkit-user-select:text;user-select:text;
+  position:relative;z-index:1;pointer-events:auto;
 }
 .pin-digit:focus{border-color:var(--accent)}
 .pin-status{text-align:center;font-size:12px;margin-top:6px;min-height:18px}
@@ -353,7 +372,7 @@ textarea.input{resize:vertical;line-height:1.65}
   display:flex;align-items:center;gap:12px;
   padding-bottom:14px;border-bottom:1px solid var(--border);margin-bottom:16px;
 }
-.memo-view-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.memo-view-icon{width:16px;height:16px;border-radius:50%;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .memo-view-name{font-size:15px;font-weight:600}
 .memo-view-cat{font-size:11px;color:var(--text2);margin-top:2px}
 
@@ -384,8 +403,7 @@ textarea.input{resize:vertical;line-height:1.65}
   flex-shrink:0;
 }
 .memo-popup-icon{
-  width:32px;height:32px;border-radius:8px;
-  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+  width:14px;height:14px;border-radius:50%;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25);
 }
 .memo-popup-name{font-size:14px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .memo-popup-close{
@@ -461,6 +479,22 @@ textarea.input{resize:vertical;line-height:1.65}
 .toast.error{border-left:3px solid var(--danger)}
 @keyframes tIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
+/* Excel import */
+.excel-dropzone{
+  border:2px dashed var(--border2);border-radius:var(--r);
+  padding:28px 16px;text-align:center;cursor:pointer;
+  background:var(--bg3);transition:all .15s;margin-bottom:12px;
+}
+.excel-dropzone:hover,.excel-dropzone.dragover{border-color:var(--accent);background:rgba(74,123,212,.06)}
+.excel-dropzone .ed-icon{font-size:32px;opacity:.4;margin-bottom:8px}
+.excel-dropzone .ed-text{font-size:12px;color:var(--text2);line-height:1.7}
+.excel-preview-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+.excel-preview-table th,.excel-preview-table td{border:1px solid var(--border);padding:4px 7px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+.excel-preview-table th{background:var(--bg3);font-weight:600;color:var(--text2)}
+.excel-preview-wrap{max-height:220px;overflow:auto;border-radius:var(--r-sm);border:1px solid var(--border)}
+.excel-summary{font-size:12px;color:var(--text2);margin:10px 0;line-height:1.7}
+.excel-summary strong{color:var(--accent)}
+
 /* ══════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════ */
@@ -474,25 +508,23 @@ textarea.input{resize:vertical;line-height:1.65}
 </style>
 </head>
 <body>
-
 <!-- ═══════════ HEADER ═══════════ -->
 <div class="header">
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v2</span>
+    <span class="logo-ver">v3</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
     <button class="btn btn-primary" onclick="confirmNewLayout()">＋ 新規作成</button>
+    <button class="btn btn-excel" onclick="openExcelModal()">📥 Excelから一括作成</button>
+    <button class="btn btn-align" onclick="openAlignModal()">▦ 整列</button>
     <button class="btn" onclick="manageCats()">カテゴリー管理</button>
     <button class="btn btn-frame" onclick="openFrameModal()">グループ枠作成</button>
     <button class="btn btn-connector" id="connectorBtn" onclick="addConnector()">➜ コネクタ追加</button>
   </div>
   <div class="header-right">
-    <button class="btn" onclick="importData()">PCから読込</button>
-    <button class="btn" onclick="exportJSON()">PCに保存</button>
-    <div class="header-sep"></div>
     <button class="btn btn-save" onclick="openSaveModal()">新規保存</button>
     <button class="btn btn-save" id="updateBtn" style="display:none;background:#5b21b6;border-color:#5b21b6" onclick="confirmOverwrite()">上書き更新</button>
     <button class="btn btn-load" onclick="openLoadModal()">クラウド読込</button>
@@ -514,41 +546,37 @@ textarea.input{resize:vertical;line-height:1.65}
     <!-- Tab: Shortcut -->
     <div class="tab-content" id="tabSc">
       <div class="s-section">
-        <button class="btn btn-primary" style="width:100%" onclick="addShortcut()">＋ 追加する</button>
-      </div>
-      <div class="s-section">
-        <div class="form-row"><label>カテゴリー</label><select id="catSelect" class="input"></select></div>
         <div class="form-row"><label>作業名</label><input id="scName" class="input" placeholder="例：勤怠管理システム"></div>
         <div class="form-row"><label>URL</label><input id="scUrl" class="input" placeholder="https://…"></div>
+        <div class="form-row"><label>カテゴリー</label><select id="catSelect" class="input"></select></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="addShortcut()">＋ 追加する</button>
       </div>
+
+      <!-- 詳細設定（折りたたみ） -->
       <div class="s-section">
-        <div class="s-label">カラー</div>
-        <div class="color-grid" id="colorPicker"></div>
-      </div>
-      <div class="s-section">
-        <div class="s-label">アイコン</div>
-        <div class="icon-grid" id="iconPicker"></div>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
-          <input id="iconNumberInput" class="input" type="text" maxlength="4"
-            placeholder="数字（例：1234）"
-            style="font-size:13px;font-family:'DM Mono',monospace;letter-spacing:1px;flex:1"
-            oninput="applyIconNumber(this.value)">
-          <div id="iconNumberPreview" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:11px;font-family:'DM Mono',monospace;font-weight:700;color:var(--text);flex-shrink:0;letter-spacing:0"></div>
-        </div>
-      </div>
-      <div class="s-section">
-        <div class="form-row"><label>ボタンサイズ: <span id="sizeLabel">140</span>px</label><input type="range" class="slider" id="sizeSlider" min="80" max="200" value="140"></div>
-        <div class="form-row"><label>フォントサイズ: <span id="fontLabel">14</span>px</label><input type="range" class="slider" id="fontSlider" min="9" max="22" value="14"></div>
-      </div>
-      <div class="s-section">
-        <div class="s-label">プレビュー</div>
-        <div class="preview-wrap">
-          <div id="previewBtn" style="position:relative;width:120px;height:120px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:1px solid rgba(255,255,255,.09);overflow:hidden;flex-shrink:0">
-            <div id="previewIcon" style="font-size:20px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:rgba(255,255,255,.15)">🔗</div>
-            <div id="previewName" style="font-size:14px;font-weight:700;text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.4);padding:0 6px">作業名</div>
+        <button class="adv-toggle" id="advToggle" onclick="toggleAdv()">
+          <span>詳細設定（色・サイズ）</span>
+          <span class="adv-arrow">▶</span>
+        </button>
+        <div class="adv-body" id="advBody">
+          <div style="margin-top:12px">
+            <div class="s-label">カラー</div>
+            <div class="color-grid" id="colorPicker"></div>
+          </div>
+          <div style="margin-top:14px">
+            <div class="form-row"><label>ボタンサイズ: <span id="sizeLabel">140</span>px</label><input type="range" class="slider" id="sizeSlider" min="80" max="240" value="140"></div>
+            <div class="form-row"><label>最大文字サイズ: <span id="fontLabel">60</span>px</label><input type="range" class="slider" id="fontSlider" min="12" max="80" value="60"></div>
+            <p style="font-size:10px;color:var(--text3);line-height:1.6;margin-top:2px">作業名はボタン内に収まる範囲でこのサイズまで自動拡大されます。</p>
+          </div>
+          <div style="margin-top:10px">
+            <div class="s-label">プレビュー</div>
+            <div class="preview-wrap">
+              <div id="previewBtn" style="position:relative;width:120px;height:120px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.09);overflow:hidden;flex-shrink:0;padding:10px">
+                <div id="previewName" style="font-size:24px;font-weight:800;text-align:center;line-height:1.2;text-shadow:0 1px 3px rgba(0,0,0,.4);width:100%;word-break:break-word;overflow:hidden">作業名</div>
+              </div>
+            </div>
           </div>
         </div>
-        <button class="btn btn-primary" style="width:100%;margin-top:8px;visibility:hidden;height:0;padding:0;margin:0" aria-hidden="true"></button>
       </div>
     </div>
 
@@ -636,6 +664,79 @@ textarea.input{resize:vertical;line-height:1.65}
 
 <!-- ═══════════ MODALS ═══════════ -->
 
+<!-- Excel import -->
+<div class="overlay" id="excelOverlay" onclick="closeOnBg(event,'excelOverlay')">
+<div class="modal modal-wide">
+  <h2>📥 Excelから一括作成</h2>
+  <div class="excel-dropzone" id="excelDropzone" onclick="document.getElementById('excelFile').click()">
+    <div class="ed-icon">📊</div>
+    <div class="ed-text">
+      クリックまたはドラッグ＆ドロップで<br>
+      <strong>.xlsx / .xls</strong> ファイルを選択
+    </div>
+  </div>
+  <input type="file" id="excelFile" accept=".xlsx,.xls" style="display:none">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+    <span style="font-size:11px;color:var(--text3)">フォーマット例（1行目はヘッダー）</span>
+    <button class="btn btn-sm" onclick="downloadExcelTemplate()" style="font-size:10px;padding:4px 8px">📄 テンプレートDL</button>
+  </div>
+  <div style="font-size:11px;color:var(--text2);line-height:1.8;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:12px">
+    必須列: <strong>カテゴリー</strong> / <strong>名称</strong> / <strong>URL</strong><br>
+    任意列: メモ・カラー<br>
+    同じカテゴリーは自動でグループ枠にまとめられます。
+  </div>
+
+  <div id="excelPreviewArea" style="display:none">
+    <div class="excel-summary" id="excelSummary"></div>
+    <div class="excel-preview-wrap">
+      <table class="excel-preview-table" id="excelPreviewTable"></table>
+    </div>
+    <div class="form-group" style="margin-top:12px">
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+        <input type="checkbox" id="excelClearFirst" checked style="width:auto">
+        読み込み前に現在のレイアウトをクリアする
+      </label>
+    </div>
+  </div>
+
+  <div class="modal-actions">
+    <button class="btn btn-sm" onclick="closeExcelModal()">キャンセル</button>
+    <button class="btn btn-excel btn-sm" id="excelApplyBtn" onclick="applyExcel()" disabled>レイアウトを生成</button>
+  </div>
+</div></div>
+
+<!-- Align -->
+<div class="overlay" id="alignOverlay" onclick="closeOnBg(event,'alignOverlay')">
+<div class="modal">
+  <h2>▦ ボタンを自動整列</h2>
+  <p style="font-size:12px;color:var(--text2);line-height:1.8;margin-bottom:14px">
+    キャンバス上のボタンをグループごとに枠で囲い、きれいに並べ替えます。色は変更しません。
+  </p>
+  <div class="form-group">
+    <label>グループ分けの基準</label>
+    <select id="alignBasis" class="input" onchange="updateAlignPreview()">
+      <option value="color">ボタンの色ごと</option>
+      <option value="category">カテゴリーごと</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label>横に並べる数: <span id="alignColsLabel">4</span> 個</label>
+    <input type="range" class="slider" id="alignColsSlider" min="2" max="8" value="4" oninput="document.getElementById('alignColsLabel').textContent=this.value">
+  </div>
+  <div class="form-group">
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--text)">
+      <input type="checkbox" id="alignKeepFrames" style="width:auto">
+      既存のグループ枠を残す（チェックなしで作り直し）
+    </label>
+  </div>
+  <div class="excel-summary" id="alignPreview" style="margin-top:4px"></div>
+  <div class="modal-actions">
+    <button class="btn btn-sm" onclick="closeAlignModal()">キャンセル</button>
+    <button class="btn btn-align btn-sm" onclick="applyAlign()">整列する</button>
+  </div>
+</div></div>
+
 <!-- Edit Shortcut -->
 <div class="overlay" id="editOverlay" onclick="closeOnBg(event,'editOverlay')">
 <div class="modal modal-wide">
@@ -644,17 +745,16 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="form-group"><label>作業名</label><input id="editName" class="input"></div>
   <div class="form-group"><label>URL</label><input id="editUrl" class="input"></div>
   <div class="form-group"><label>カラー</label><div class="color-grid" id="editColorPicker"></div></div>
-  <div class="form-group"><label>アイコン</label><div class="icon-grid" id="editIconPicker"></div>
-    <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
-      <input id="editIconNumberInput" class="input" type="text" maxlength="4"
-        placeholder="数字（例：1234）"
-        style="font-size:13px;font-family:'DM Mono',monospace;letter-spacing:1px;flex:1"
-        oninput="applyEditIconNumber(this.value)">
-      <div id="editIconNumberPreview" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:11px;font-family:'DM Mono',monospace;font-weight:700;color:var(--text);flex-shrink:0"></div>
+  <div class="form-group">
+    <label>プレビュー</label>
+    <div class="preview-wrap" style="padding:6px 0 10px">
+      <div id="editPreviewBtn" style="position:relative;border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.09);overflow:hidden;flex-shrink:0;padding:10px">
+        <div id="editPreviewName" style="font-weight:800;text-align:center;line-height:1.2;text-shadow:0 1px 3px rgba(0,0,0,.4);width:100%;word-break:break-word;overflow:hidden">作業名</div>
+      </div>
     </div>
   </div>
-  <div class="form-group"><label>サイズ: <span id="editSizeLabel">120</span>px</label><input type="range" class="slider" id="editSizeSlider" min="80" max="200" value="120"></div>
-  <div class="form-group"><label>フォントサイズ: <span id="editFontLabel">14</span>px</label><input type="range" class="slider" id="editFontSlider" min="9" max="22" value="14"></div>
+  <div class="form-group"><label>サイズ: <span id="editSizeLabel">120</span>px</label><input type="range" class="slider" id="editSizeSlider" min="80" max="240" value="120"></div>
+  <div class="form-group"><label>最大文字サイズ: <span id="editFontLabel">60</span>px</label><input type="range" class="slider" id="editFontSlider" min="12" max="80" value="60"></div>
   <!-- Memo -->
   <div class="form-group">
     <label>メモ・作業手順</label>
@@ -775,10 +875,10 @@ textarea.input{resize:vertical;line-height:1.65}
   <h2>マイレイアウトを保存</h2>
   <p style="font-size:12px;color:var(--text2);margin-bottom:4px;line-height:1.7">4桁のPINコードを設定<br>このPINで他のPCからも呼び出せます</p>
   <div class="pin-group" id="savePinGroup">
-    <input class="pin-digit" maxlength="1" inputmode="numeric">
-    <input class="pin-digit" maxlength="1" inputmode="numeric">
-    <input class="pin-digit" maxlength="1" inputmode="numeric">
-    <input class="pin-digit" maxlength="1" inputmode="numeric">
+    <input class="pin-digit" type="tel" maxlength="1" inputmode="numeric" autocomplete="off">
+    <input class="pin-digit" type="tel" maxlength="1" inputmode="numeric" autocomplete="off">
+    <input class="pin-digit" type="tel" maxlength="1" inputmode="numeric" autocomplete="off">
+    <input class="pin-digit" type="tel" maxlength="1" inputmode="numeric" autocomplete="off">
   </div>
   <div style="margin:10px 24px 0;text-align:left">
     <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">名前（任意）</label>
@@ -796,36 +896,39 @@ textarea.input{resize:vertical;line-height:1.65}
 <div class="modal" style="max-width:420px">
   <h2 style="margin-bottom:16px">マイレイアウトを読み込み</h2>
 
+  <!-- PIN手動入力（上部に移動：確実にフォーカスできるように） -->
+  <p style="font-size:12px;color:var(--text2);margin-bottom:8px;text-align:center">4桁PINを入力</p>
+  <div class="pin-group" id="loadPinGroup">
+    <input class="pin-digit" type="tel" maxlength="1" inputmode="numeric" autocomplete="off">
+    <input class="pin-digit" type="tel" maxlength="1" inputmode="numeric" autocomplete="off">
+    <input class="pin-digit" type="tel" maxlength="1" inputmode="numeric" autocomplete="off">
+    <input class="pin-digit" type="tel" maxlength="1" inputmode="numeric" autocomplete="off">
+  </div>
+  <div class="pin-status" id="loadStatus"></div>
+  <div class="modal-actions center" style="margin-top:4px;margin-bottom:8px">
+    <button class="btn btn-load btn-sm" id="loadBtn" onclick="doCloudLoad()">このPINで読み込む</button>
+  </div>
+
+  <!-- 区切り -->
+  <div style="display:flex;align-items:center;gap:8px;margin:14px 0 12px">
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+    <span style="font-size:11px;color:var(--text3)">または一覧から選択</span>
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+  </div>
+
   <!-- PIN一覧 -->
   <div id="pinListSection">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <span style="font-size:12px;font-weight:600;color:var(--text2)">保存済みPIN一覧</span>
-      <button class="btn btn-sm btn-ghost" onclick="fetchPinList()" id="pinListRefreshBtn" style="font-size:11px;padding:4px 10px">🔄 更新</button>
+      <button class="btn btn-sm" onclick="fetchPinList()" id="pinListRefreshBtn" style="font-size:11px;padding:4px 10px">🔄 更新</button>
     </div>
-    <div id="pinListArea" style="min-height:60px;max-height:260px;overflow-y:auto;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;margin-bottom:12px">
+    <div id="pinListArea" style="min-height:60px;max-height:220px;overflow-y:auto;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px">
       <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:8px">「更新」を押して一覧を取得</p>
     </div>
   </div>
 
-  <!-- 区切り -->
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-    <div style="flex:1;height:1px;background:var(--border)"></div>
-    <span style="font-size:11px;color:var(--text3)">または直接入力</span>
-    <div style="flex:1;height:1px;background:var(--border)"></div>
-  </div>
-
-  <!-- PIN手動入力 -->
-  <p style="font-size:12px;color:var(--text2);margin-bottom:8px;text-align:center">4桁PINを入力</p>
-  <div class="pin-group" id="loadPinGroup">
-    <input class="pin-digit" maxlength="1" inputmode="numeric">
-    <input class="pin-digit" maxlength="1" inputmode="numeric">
-    <input class="pin-digit" maxlength="1" inputmode="numeric">
-    <input class="pin-digit" maxlength="1" inputmode="numeric">
-  </div>
-  <div class="pin-status" id="loadStatus"></div>
-  <div class="modal-actions center" style="margin-top:12px">
-    <button class="btn btn-sm" onclick="closeLoadModal()">キャンセル</button>
-    <button class="btn btn-load btn-sm" id="loadBtn" onclick="doCloudLoad()">読み込む</button>
+  <div class="modal-actions center" style="margin-top:14px">
+    <button class="btn btn-sm" onclick="closeLoadModal()">閉じる</button>
   </div>
 </div></div>
 
@@ -918,19 +1021,6 @@ textarea.input{resize:vertical;line-height:1.65}
   </div>
 </div></div>
 
-<!-- Import -->
-<div class="overlay" id="importOverlay" onclick="closeOnBg(event,'importOverlay')">
-<div class="modal">
-  <h2>データインポート</h2>
-  <p style="font-size:12px;color:var(--text2);margin-bottom:10px">JSONファイルまたはテキストを貼り付け</p>
-  <input type="file" id="importFile" accept=".json" style="font-size:12px;color:var(--text);margin-bottom:8px">
-  <textarea id="importText" class="input" rows="5" placeholder='{"categories":[...],"shortcuts":[...]}'></textarea>
-  <div class="modal-actions">
-    <button class="btn btn-sm" onclick="closeImportModal()">キャンセル</button>
-    <button class="btn btn-primary btn-sm" onclick="doImport()">インポート</button>
-  </div>
-</div></div>
-
 <div class="toast-wrap" id="toastWrap"></div>
 
 <!-- Memo Popup -->
@@ -960,12 +1050,6 @@ const COLORS = [
   '#FF4081','#AB47BC','#E040FB','#FF1744','#d63031',
   '#FFFFFF','#C0C0C0','#808080','#2D2D2D'
 ];
-const ICONS = [
-  '⭐','❤️','🔥','⚡','🎯','✅','🚀','💡',
-  '🏠','📊','📁','📧','🔧','📱','💼','📅',
-  '🔍','🛒','💰','☁️','🌐','🏭','🚚','📌',
-  '🔔','🧩','🛠️','📜'
-];
 const FRAME_COLORS = [
   '#4f8cff','#6c5ce7','#00b894','#e17055',
   '#fdcb6e','#fd79a8','#00cec9','#636e72',
@@ -983,6 +1067,11 @@ const BG_COLORS = [
   {color:'#1a1a2e',label:'ネイビー'},
   {color:'#0c0e14',label:'ブラック'}
 ];
+const CAT_PALETTE = [
+  '#2196F3','#4CD964','#FF8C00','#7C4DFF','#FF2D87',
+  '#00BCD4','#FFD60A','#34C759','#AB47BC','#1E90FF',
+  '#FF6B35','#2DD4BF'
+];
 
 /* ══════════════════════════════════
    STATE
@@ -995,8 +1084,8 @@ let state = {
   connDefault: { color: '#4a7bd4', width: 2, arrow: 'end' },
   popupSettings: { size: 'm', font: 'm' }
 };
-let selColor = COLORS[0], selIcon = ICONS[0];
-let editColor = COLORS[0], editIcon = ICONS[0];
+let selColor = COLORS[0];
+let editColor = COLORS[0];
 let editingId = null, memoTargetId = null;
 let ctxId = null, fctxId = null;
 let isDragging = false, dragEl = null, dragId = null, dragOffsetX = 0, dragOffsetY = 0, dragType = null;
@@ -1004,10 +1093,11 @@ let isResizing = false, resizeEl = null, resizeId = null, resizeStartX = 0, resi
 let currentPin = null, GAS_URL = '';
 let frameEditId = null, frameSelColor = FRAME_COLORS[0];
 let activeFilter = 'all';
-// Connector
+let userSelectedColor = false;
 let connCtxId = null, connEditId = null;
 let connEditColor = '#4a7bd4';
 let connSelectedId = null;
+let excelParsed = null;
 
 /* ══════════════════════════════════
    STORAGE
@@ -1022,7 +1112,6 @@ function loadState() {
     if (d8) {
       state = JSON.parse(d8);
     } else if (d7) {
-      // migrate from v1
       state = JSON.parse(d7);
       state.shortcuts = (state.shortcuts||[]).map(s => ({memo:'', ...s}));
       save();
@@ -1036,6 +1125,17 @@ function loadState() {
     if (!state.popupSettings) state.popupSettings = { size:'m', font:'m' };
     migrateConnections(state);
   } catch(e) {}
+}
+
+function catColor(cat) {
+  const idx = state.categories.indexOf(cat);
+  const i = idx >= 0 ? idx : (state.categories.length);
+  return CAT_PALETTE[i % CAT_PALETTE.length];
+}
+function frameColorForCat(cat) {
+  const idx = state.categories.indexOf(cat);
+  const i = idx >= 0 ? idx : 0;
+  return FRAME_COLORS[i % FRAME_COLORS.length];
 }
 
 /* ══════════════════════════════════
@@ -1081,7 +1181,6 @@ function syncConnDefault(key, val) {
   save();
 }
 
-// ポップアップサイズ・フォント設定
 const POPUP_SIZE = { s:{w:320,h:360}, m:{w:460,h:520}, l:{w:600,h:660} };
 const POPUP_FONT = { s:'11px', m:'13px', l:'16px' };
 
@@ -1092,7 +1191,6 @@ function applyPopupSettings() {
   if (el) { el.style.width = sz.w+'px'; el.style.maxHeight = sz.h+'px'; }
   const body = document.querySelector('.memo-popup-body');
   if (body) body.style.fontSize = POPUP_FONT[ps.font] || POPUP_FONT.m;
-  // ボタンのアクティブ状態を更新
   document.querySelectorAll('.popup-size-btn').forEach(b =>
     b.classList.toggle('btn-primary', b.dataset.size === ps.size));
   document.querySelectorAll('.popup-font-btn').forEach(b =>
@@ -1100,13 +1198,11 @@ function applyPopupSettings() {
 }
 function setPopupSize(s) {
   if (!state.popupSettings) state.popupSettings = { size:'m', font:'m' };
-  state.popupSettings.size = s;
-  save(); applyPopupSettings();
+  state.popupSettings.size = s; save(); applyPopupSettings();
 }
 function setPopupFont(f) {
   if (!state.popupSettings) state.popupSettings = { size:'m', font:'m' };
-  state.popupSettings.font = f;
-  save(); applyPopupSettings();
+  state.popupSettings.font = f; save(); applyPopupSettings();
 }
 
 function openSettingsModal() {
@@ -1134,8 +1230,7 @@ function saveSettings() {
     width: parseInt(document.getElementById('connDefaultWidthSlider').value),
     arrow: document.getElementById('connDefaultArrow').value
   };
-  save();
-  closeSettingsModal(); toast('設定を保存しました');
+  save(); closeSettingsModal(); toast('設定を保存しました');
 }
 
 const UPDATE_URL = 'https://takahirohayashi358244.github.io/shortcut-builder/';
@@ -1152,11 +1247,7 @@ async function doAppUpdate() {
       throw new Error('有効なShortcut BuilderのHTMLではありません');
     }
     setUpdateStatus('取得完了。データを引き継いでリロードします…', 'success');
-    setTimeout(() => {
-      document.open();
-      document.write(newHtml);
-      document.close();
-    }, 1200);
+    setTimeout(() => { document.open(); document.write(newHtml); document.close(); }, 1200);
   } catch(e) {
     setUpdateStatus('エラー: ' + e.message, 'error');
     btn.disabled = false;
@@ -1193,17 +1284,24 @@ function resetLayout() {
 }
 
 /* ══════════════════════════════════
-   PIN INPUT
+   PIN INPUT（フォーカス堅牢化）
 ══════════════════════════════════ */
 function setupPin(gid) {
   const inputs = document.getElementById(gid).querySelectorAll('.pin-digit');
   inputs.forEach((inp, i) => {
+    inp.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      setTimeout(() => { try { inp.focus(); inp.select(); } catch(_){} }, 0);
+    });
+    inp.addEventListener('focus', () => { try { inp.select(); } catch(_){} });
     inp.addEventListener('input', () => {
       inp.value = inp.value.replace(/\D/g,'').slice(0,1);
       if (inp.value && i < 3) inputs[i+1].focus();
     });
     inp.addEventListener('keydown', e => {
       if (e.key === 'Backspace' && !inp.value && i > 0) { inputs[i-1].focus(); inputs[i-1].value = ''; }
+      if (e.key === 'ArrowLeft'  && i > 0) inputs[i-1].focus();
+      if (e.key === 'ArrowRight' && i < 3) inputs[i+1].focus();
     });
     inp.addEventListener('paste', e => {
       e.preventDefault();
@@ -1226,7 +1324,7 @@ function openSaveModal() {
   document.getElementById('saveStatus').textContent = '';
   document.getElementById('saveNameInput').value = '';
   document.getElementById('saveOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('savePinGroup').querySelector('.pin-digit').focus(), 100);
+  setTimeout(() => { const f=document.getElementById('savePinGroup').querySelector('.pin-digit'); f.focus(); }, 120);
 }
 function closeSaveModal() { document.getElementById('saveOverlay').classList.remove('open'); }
 
@@ -1276,7 +1374,7 @@ function openLoadModal() {
   document.getElementById('loadStatus').textContent = '';
   document.getElementById('pinListArea').innerHTML = '<p style="font-size:12px;color:var(--text3);text-align:center;padding:8px">読み込み中…</p>';
   document.getElementById('loadOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('loadPinGroup').querySelector('.pin-digit').focus(), 100);
+  setTimeout(() => { const f=document.getElementById('loadPinGroup').querySelector('.pin-digit'); f.focus(); }, 150);
   fetchPinList();
 }
 function closeLoadModal() { document.getElementById('loadOverlay').classList.remove('open'); }
@@ -1302,7 +1400,7 @@ async function fetchPinList() {
         const updated = item.updated ? new Date(item.updated).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
         const nameStr = item.name ? `<span style="font-size:11px;color:var(--text2);margin-left:4px">${esc(item.name)}</span>` : '';
         const loadBtn = document.createElement('button');
-        loadBtn.className = 'btn btn-ghost btn-sm';
+        loadBtn.className = 'btn btn-sm';
         loadBtn.style.cssText = 'flex:1;justify-content:space-between;font-family:"DM Mono",monospace';
         loadBtn.innerHTML = `<span><span style="font-size:14px;font-weight:700;letter-spacing:2px;color:var(--accent)">${item.pin}</span>${nameStr}</span><span style="font-size:10px;color:var(--text3)">${updated}</span>`;
         loadBtn.onclick = () => {
@@ -1311,7 +1409,7 @@ async function fetchPinList() {
           doCloudLoad();
         };
         const editBtn = document.createElement('button');
-        editBtn.className = 'btn btn-ghost btn-sm';
+        editBtn.className = 'btn btn-sm';
         editBtn.style.cssText = 'padding:5px 8px;flex-shrink:0';
         editBtn.title = '名前を変更';
         editBtn.textContent = '✏️';
@@ -1347,24 +1445,21 @@ async function doRename() {
     const json = await res.json();
     if (json.success) {
       toast('名前を変更しました');
-      // 現在読込中のPINと一致すれば表示も更新
       if (renamePinTarget === currentPin) {
         const label = name ? `${name}（${currentPin}）` : `PIN: ${currentPin}`;
         const _cp = document.getElementById('currentPin');
         _cp.textContent = label; _cp.classList.add('active');
       }
       document.getElementById('renameOverlay').classList.remove('open');
-      fetchPinList();  // 一覧を再取得
+      fetchPinList();
     } else { toast(json.error||'変更失敗','error'); }
   } catch(e) { toast('通信エラー','error'); }
 }
 
-// 旧形式コネクタ（from/to）を新形式（x1/y1/x2/y2）に変換
 function migrateConnections(st) {
   if (!st.connections) { st.connections = []; return; }
   if (!st.nextConnId) st.nextConnId = 1;
   st.connections = st.connections.map(c => {
-    // 旧形式: { id, from, to, color, width, arrow }
     if (c.from !== undefined && c.to !== undefined && c.x1 === undefined) {
       const a = (st.shortcuts||[]).find(s => s.id === c.from);
       const b = (st.shortcuts||[]).find(s => s.id === c.to);
@@ -1373,21 +1468,15 @@ function migrateConnections(st) {
       const bx = b ? b.x + (b.w||140)/2 : 300;
       const by = b ? b.y + (b.h||140)/2 : 100;
       return {
-        id:    c.id,
-        x1: ax, y1: ay, x2: bx, y2: by,
-        snap1: a ? c.from : null,
-        snap2: b ? c.to   : null,
-        color: c.color || '#4a7bd4',
-        width: c.width || 2,
-        arrow: c.arrow || 'end'
+        id: c.id, x1: ax, y1: ay, x2: bx, y2: by,
+        snap1: a ? c.from : null, snap2: b ? c.to : null,
+        color: c.color || '#4a7bd4', width: c.width || 2, arrow: c.arrow || 'end'
       };
     }
-    // 新形式はそのまま（snap1/snap2未定義の場合は補完）
     if (c.snap1 === undefined) c.snap1 = null;
     if (c.snap2 === undefined) c.snap2 = null;
     return c;
   });
-  // nextConnIdを最大IDより大きく設定
   const maxId = st.connections.reduce((m, c) => Math.max(m, c.id||0), 0);
   if (st.nextConnId <= maxId) st.nextConnId = maxId + 1;
 }
@@ -1405,9 +1494,7 @@ async function doCloudLoad() {
       if (!state.frames) state.frames = [];
       if (!state.nextFrameId) state.nextFrameId = 1;
       if (!state.canvasBg) state.canvasBg = '#0c0e14';
-      // migrate memo
       state.shortcuts = (state.shortcuts||[]).map(s => ({memo:'', ...s}));
-      // migrate connections（旧from/to形式 → 新x1/y1/x2/y2形式）
       migrateConnections(state);
       applyBg(); save(); populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount();
       currentPin = pin;
@@ -1424,14 +1511,274 @@ async function doCloudLoad() {
 }
 
 /* ══════════════════════════════════
+   EXCEL 一括読込
+══════════════════════════════════ */
+function normalizeHeader(h) {
+  const s = String(h||'').trim().toLowerCase().replace(/\s/g,'');
+  if (['カテゴリー','カテゴリ','category','cat','分類','グループ','group'].includes(s)) return 'category';
+  if (['名称','名前','作業名','name','title','ボタン名'].includes(s)) return 'name';
+  if (['url','リンク','link','アドレス'].includes(s)) return 'url';
+  if (['メモ','備考','memo','note','手順','作業手順'].includes(s)) return 'memo';
+  if (['カラー','色','color','colour'].includes(s)) return 'color';
+  if (['アイコン','icon','絵文字'].includes(s)) return 'icon';
+  return null;
+}
+
+function openExcelModal() {
+  excelParsed = null;
+  document.getElementById('excelPreviewArea').style.display = 'none';
+  document.getElementById('excelApplyBtn').disabled = true;
+  document.getElementById('excelFile').value = '';
+  document.getElementById('excelOverlay').classList.add('open');
+}
+function closeExcelModal() { document.getElementById('excelOverlay').classList.remove('open'); }
+
+function handleExcelFile(file) {
+  if (!file) return;
+  if (typeof XLSX === 'undefined') { toast('Excelライブラリの読込に失敗（ネット接続を確認）','error'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'', blankrows:false });
+      parseExcelRows(rows);
+    } catch(err) {
+      toast('Excel解析エラー: '+err.message,'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseExcelRows(rows) {
+  if (!rows || rows.length < 2) { toast('データ行が見つかりません','error'); return; }
+  const headerRow = rows[0].map(normalizeHeader);
+  const colIdx = {};
+  headerRow.forEach((h, i) => { if (h && !(h in colIdx)) colIdx[h] = i; });
+  if (colIdx.name === undefined || colIdx.url === undefined) {
+    toast('「名称」「URL」列が見つかりません','error'); return;
+  }
+  const items = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const name = String(row[colIdx.name]||'').trim();
+    const url  = String(row[colIdx.url]||'').trim();
+    if (!name) continue;
+    const cat  = colIdx.category !== undefined ? (String(row[colIdx.category]||'').trim() || '未分類') : '未分類';
+    const memo = colIdx.memo  !== undefined ? String(row[colIdx.memo]||'').trim() : '';
+    const color= colIdx.color !== undefined ? String(row[colIdx.color]||'').trim() : '';
+    const icon = colIdx.icon  !== undefined ? String(row[colIdx.icon]||'').trim() : '';
+    items.push({ category:cat, name, url, memo, color, icon });
+  }
+  if (!items.length) { toast('有効なデータがありません','error'); return; }
+  excelParsed = items;
+  renderExcelPreview(items, colIdx);
+  document.getElementById('excelApplyBtn').disabled = false;
+}
+
+function renderExcelPreview(items, colIdx) {
+  const cats = [...new Set(items.map(i => i.category))];
+  document.getElementById('excelSummary').innerHTML =
+    `<strong>${items.length}</strong> 件のショートカット / <strong>${cats.length}</strong> カテゴリー枠を生成します<br>` +
+    `カテゴリー: ${cats.map(c=>esc(c)).join('、 ')}`;
+  const tbl = document.getElementById('excelPreviewTable');
+  const cols = ['カテゴリー','名称','URL'];
+  if (colIdx.memo !== undefined) cols.push('メモ');
+  let html = '<thead><tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+  items.slice(0, 30).forEach(it => {
+    let tds = `<td>${esc(it.category)}</td><td>${esc(it.name)}</td><td>${esc(it.url)}</td>`;
+    if (colIdx.memo !== undefined) tds += `<td>${esc(it.memo)}</td>`;
+    html += `<tr>${tds}</tr>`;
+  });
+  html += '</tbody>';
+  if (items.length > 30) html += `<caption style="caption-side:bottom;font-size:10px;color:var(--text3);padding:4px">…他 ${items.length-30} 件</caption>`;
+  tbl.innerHTML = html;
+  document.getElementById('excelPreviewArea').style.display = 'block';
+}
+
+function applyExcel() {
+  if (!excelParsed || !excelParsed.length) { toast('先にExcelを読み込んでください','error'); return; }
+  const clearFirst = document.getElementById('excelClearFirst').checked;
+  if (clearFirst) {
+    state.shortcuts = []; state.frames = []; state.connections = [];
+    state.nextId = 1; state.nextFrameId = 1; state.nextConnId = 1;
+  }
+  const cats = [...new Set(excelParsed.map(i => i.category))];
+  cats.forEach(c => { if (!state.categories.includes(c)) state.categories.push(c); });
+
+  const BTN = 130, GAP = 18;
+  const FRAME_PAD = 26;
+  const FRAME_TOP = 44;
+  const FRAME_GAP_Y = 70;
+  const COLS = 4;
+  const START_X = 50, START_Y = 60;
+
+  let cursorY = START_Y;
+
+  cats.forEach(cat => {
+    const itemsInCat = excelParsed.filter(i => i.category === cat);
+    if (!itemsInCat.length) return;
+    const cols = Math.min(COLS, itemsInCat.length);
+    const rows = Math.ceil(itemsInCat.length / cols);
+    const innerW = cols * BTN + (cols - 1) * GAP;
+    const innerH = rows * BTN + (rows - 1) * GAP;
+    const frameW = innerW + FRAME_PAD * 2;
+    const frameH = innerH + FRAME_PAD + FRAME_TOP;
+    const frameX = START_X;
+    const frameY = cursorY;
+    state.frames.push({
+      id: state.nextFrameId++, name: cat, color: frameColorForCat(cat),
+      borderWidth: 3, bgOpacity: 6, x: frameX, y: frameY, w: frameW, h: frameH
+    });
+    itemsInCat.forEach((it, idx) => {
+      const cI = idx % cols, rI = Math.floor(idx / cols);
+      const bx = frameX + FRAME_PAD + cI * (BTN + GAP);
+      const by = frameY + FRAME_TOP + rI * (BTN + GAP);
+      const color = isValidHex(it.color) ? it.color : catColor(cat);
+      state.shortcuts.push({
+        id: state.nextId++, category: cat, name: it.name, url: it.url,
+        color, x: bx, y: by, w: BTN, h: BTN, fontSize: 60, memo: it.memo || ''
+      });
+    });
+    cursorY = frameY + frameH + FRAME_GAP_Y;
+  });
+
+  save(); populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount();
+  closeExcelModal();
+  toast(`${excelParsed.length}件を生成しました`);
+  excelParsed = null;
+}
+
+function isValidHex(s) { return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(String(s||'').trim()); }
+
+/* ══════════════════════════════════
+   AUTO ALIGN（既存ボタンをグループ整列）
+══════════════════════════════════ */
+function openAlignModal() {
+  if (!state.shortcuts.length) { toast('整列するボタンがありません','error'); return; }
+  document.getElementById('alignKeepFrames').checked = false;
+  updateAlignPreview();
+  document.getElementById('alignOverlay').classList.add('open');
+}
+function closeAlignModal() { document.getElementById('alignOverlay').classList.remove('open'); }
+
+function alignKeyOf(s, basis) {
+  return basis === 'category' ? (s.category || '未分類') : (s.color || '#999999').toUpperCase();
+}
+// 色→おおまかな名前（枠ラベル用）
+function colorName(hex) {
+  const c = hex.replace('#','').toUpperCase();
+  if (c.length < 6) return hex;
+  const r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
+  const max=Math.max(r,g,b),min=Math.min(r,g,b);
+  if (max-min < 28) { if(max>205)return'白';if(max<60)return'黒';return'グレー'; }
+  if (r>=g && r>=b) return (g>120)?'オレンジ':'レッド';
+  if (g>=r && g>=b) return (b>140)?'シアン':'グリーン';
+  if (b>=r && b>=g) return (r>120)?'パープル':'ブルー';
+  return '';
+}
+
+function groupedForAlign(basis) {
+  const groups = new Map();
+  state.shortcuts.forEach(s => {
+    const k = alignKeyOf(s, basis);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(s);
+  });
+  return groups;
+}
+
+function updateAlignPreview() {
+  const basis = document.getElementById('alignBasis').value;
+  const groups = groupedForAlign(basis);
+  const lines = [];
+  groups.forEach((arr, k) => {
+    const label = basis === 'category' ? k : (colorName(k) || k);
+    lines.push(`${esc(label)}（${arr.length}）`);
+  });
+  document.getElementById('alignPreview').innerHTML =
+    `<strong>${groups.size}</strong> グループに整列します<br>` + lines.join(' / ');
+}
+
+function applyAlign() {
+  const basis = document.getElementById('alignBasis').value;
+  const cols  = parseInt(document.getElementById('alignColsSlider').value);
+  const keepFrames = document.getElementById('alignKeepFrames').checked;
+  if (!state.shortcuts.length) { toast('整列するボタンがありません','error'); return; }
+
+  if (!keepFrames) { state.frames = []; state.nextFrameId = 1; }
+
+  const groups = groupedForAlign(basis);
+
+  const BTN = 130, GAP = 18;
+  const FRAME_PAD = 26, FRAME_TOP = 44, FRAME_GAP_Y = 70;
+  const START_X = 50, START_Y = 60;
+  let cursorY = START_Y;
+
+  groups.forEach((arr, key) => {
+    const n = arr.length; if (!n) return;
+    const c = Math.min(cols, n);
+    const rows = Math.ceil(n / c);
+    const innerW = c * BTN + (c - 1) * GAP;
+    const innerH = rows * BTN + (rows - 1) * GAP;
+    const frameW = innerW + FRAME_PAD * 2;
+    const frameH = innerH + FRAME_PAD + FRAME_TOP;
+    const frameX = START_X, frameY = cursorY;
+
+    // 枠の名前と色：カテゴリ基準ならカテゴリ名＋カテゴリ色、色基準なら色名＋その色
+    let frameName, frameColor;
+    if (basis === 'category') {
+      frameName = key;
+      frameColor = frameColorForCat(key);
+    } else {
+      frameName = colorName(key) || 'グループ';
+      frameColor = key;
+    }
+    state.frames.push({
+      id: state.nextFrameId++, name: frameName, color: frameColor,
+      borderWidth: 3, bgOpacity: 8, x: frameX, y: frameY, w: frameW, h: frameH
+    });
+
+    arr.forEach((s, idx) => {
+      const cI = idx % c, rI = Math.floor(idx / c);
+      s.x = frameX + FRAME_PAD + cI * (BTN + GAP);
+      s.y = frameY + FRAME_TOP + rI * (BTN + GAP);
+      s.w = BTN; s.h = BTN;
+    });
+
+    cursorY = frameY + frameH + FRAME_GAP_Y;
+  });
+
+  // コネクタはスナップ済みのものは追従するので位置だけ再計算
+  save(); renderCanvas(); updateCount();
+  closeAlignModal();
+  toast(`${groups.size}グループに整列しました`);
+}
+
+function downloadExcelTemplate() {
+  if (typeof XLSX === 'undefined') { toast('Excelライブラリ未読込','error'); return; }
+  const data = [
+    ['カテゴリー','名称','URL','メモ'],
+    ['業務システム','勤怠管理','https://example.com/kintai','# 使い方\n- 毎朝打刻\n- **残業申請**は前日まで'],
+    ['業務システム','シフト表','https://example.com/shift',''],
+    ['管理ツール','在庫照会','https://example.com/zaiko',''],
+    ['外部サービス','佐川 追跡','https://www.sagawa-exp.co.jp/','返品時に使用']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:14},{wch:18},{wch:32},{wch:30}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'shortcuts');
+  XLSX.writeFile(wb, 'shortcut_template.xlsx');
+  toast('テンプレートをダウンロードしました');
+}
+/* ══════════════════════════════════
    PICKERS
 ══════════════════════════════════ */
 function buildPickers() {
-  rCP('colorPicker', selColor, c => { selColor = c; buildPickers(); updatePreview(); });
-  rIP('iconPicker',  selIcon,  i => { selIcon  = i; buildPickers(); updatePreview(); });
+  rCP('colorPicker', selColor, c => { selColor = c; userSelectedColor = true; buildPickers(); updatePreview(); });
 }
 function rCP(id, act, cb) {
-  const el = document.getElementById(id); el.innerHTML = '';
+  const el = document.getElementById(id); if(!el) return; el.innerHTML = '';
   COLORS.forEach(c => {
     const s = document.createElement('div');
     s.className = 'color-swatch' + (c === act ? ' active' : '');
@@ -1441,68 +1788,13 @@ function rCP(id, act, cb) {
     el.appendChild(s);
   });
 }
-function rIP(id, act, cb) {
-  const el = document.getElementById(id); el.innerHTML = '';
-  // アイコン選択時に対応する数字入力欄をクリア
-  const numInputId = id === 'iconPicker' ? 'iconNumberInput' : id === 'editIconPicker' ? 'editIconNumberInput' : null;
-  const numPrevId  = id === 'iconPicker' ? 'iconNumberPreview' : id === 'editIconPicker' ? 'editIconNumberPreview' : null;
-  ICONS.forEach(ic => {
-    const s = document.createElement('div');
-    // 数字アイコン以外の選択中表示
-    const isNum = act && act.startsWith('#NUM:');
-    s.className = 'icon-opt' + (!isNum && ic === act ? ' active' : '');
-    s.textContent = ic;
-    s.onclick = () => {
-      if (numInputId) { document.getElementById(numInputId).value = ''; document.getElementById(numPrevId).textContent = ''; }
-      cb(ic);
-    };
-    el.appendChild(s);
-  });
-}
-
-// 数字アイコンのプレフィックス
-function numIcon(num) { return '#NUM:' + num; }
-function isNumIcon(icon) { return icon && icon.startsWith('#NUM:'); }
-function numIconVal(icon) { return icon ? icon.replace('#NUM:','') : ''; }
-// アイコン表示テキストを返す（数字アイコンの場合は数字を返す）
-function iconDisplay(icon) { return isNumIcon(icon) ? numIconVal(icon) : icon; }
-
-// サイドバー：数字入力適用
-function applyIconNumber(val) {
-  const num = val.replace(/[^\d]/g,'').slice(0,4);
-  document.getElementById('iconNumberInput').value = num;
-  const prev = document.getElementById('iconNumberPreview');
-  prev.textContent = num || '';
-  prev.style.fontSize = num.length >= 4 ? '9px' : num.length >= 3 ? '10px' : '12px';
-  if (num) {
-    selIcon = numIcon(num);
-    // 絵文字グリッドの選択を解除
-    document.querySelectorAll('#iconPicker .icon-opt').forEach(e => e.classList.remove('active'));
-    updatePreview();
-  }
-}
-
-// 編集モーダル：数字入力適用
-function applyEditIconNumber(val) {
-  const num = val.replace(/[^\d]/g,'').slice(0,4);
-  document.getElementById('editIconNumberInput').value = num;
-  const prev = document.getElementById('editIconNumberPreview');
-  prev.textContent = num || '';
-  prev.style.fontSize = num.length >= 4 ? '9px' : num.length >= 3 ? '10px' : '12px';
-  if (num) {
-    editIcon = numIcon(num);
-    document.querySelectorAll('#editIconPicker .icon-opt').forEach(e => e.classList.remove('active'));
-  }
-}
 function buildBgPicker(id, act, cb) {
   const el = document.getElementById(id); if (!el) return; el.innerHTML = '';
   BG_COLORS.forEach(bg => {
     const s = document.createElement('div');
     s.className = 'bg-cell' + (bg.color === act ? ' active' : '');
     s.style.background = bg.color;
-    if (bg.color === '#dfe6e9' || bg.color === '#ffeef2' || bg.color === '#fff9e6' || bg.color === '#e8f5e9' || bg.color === '#e3f2fd' || bg.color === '#f3e5f5') {
-      s.style.borderColor = 'rgba(0,0,0,.1)';
-    }
+    if (['#dfe6e9','#ffeef2','#fff9e6','#e8f5e9','#e3f2fd','#f3e5f5'].includes(bg.color)) s.style.borderColor = 'rgba(0,0,0,.1)';
     s.innerHTML = '<span class="bg-label">'+bg.label+'</span>';
     s.onclick = () => cb && cb(bg.color);
     el.appendChild(s);
@@ -1517,16 +1809,34 @@ function updatePreview() {
   const sz = parseInt(document.getElementById('sizeSlider').value);
   const fs = parseInt(document.getElementById('fontSlider').value);
   const p = document.getElementById('previewBtn');
-  p.style.width = sz + 'px'; p.style.height = sz + 'px';
+  // プレビュー枠は最大140pxに制限（実寸との比率を保つ）
+  const pv = Math.min(sz, 140);
+  p.style.width = pv + 'px'; p.style.height = pv + 'px';
   p.style.background = `linear-gradient(145deg,${selColor}DD,${selColor}88)`;
-  document.getElementById('previewName').textContent = nm;
-  document.getElementById('previewName').style.fontSize = fs + 'px';
-  const iconEl = document.getElementById('previewIcon');
-  iconEl.textContent = iconDisplay(selIcon);
-  iconEl.style.fontSize = isNumIcon(selIcon) ? (numIconVal(selIcon).length >= 4 ? '10px' : '12px') : '20px';
-  iconEl.style.fontFamily = isNumIcon(selIcon) ? "'DM Mono',monospace" : '';
-  iconEl.style.fontWeight = isNumIcon(selIcon) ? '700' : '';
-  iconEl.style.letterSpacing = isNumIcon(selIcon) ? '0' : '';
+  const nameEl = document.getElementById('previewName');
+  nameEl.textContent = nm;
+  // 実寸ボタン(sz)での最大文字サイズをプレビュー縮尺に換算
+  const scaledMax = Math.max(10, Math.round(fs * pv / sz));
+  fitName(nameEl, pv, pv, scaledMax, false);
+}
+
+// 編集モーダルのライブプレビュー（実寸ボタンと同じ見え方を縮尺反映）
+function updateEditPreview() {
+  const p = document.getElementById('editPreviewBtn');
+  if (!p) return;
+  const nm = document.getElementById('editName').value || '作業名';
+  const sz = parseInt(document.getElementById('editSizeSlider').value);
+  const fs = parseInt(document.getElementById('editFontSlider').value);
+  const pv = Math.min(sz, 140);
+  p.style.width = pv + 'px'; p.style.height = pv + 'px';
+  p.style.background = `linear-gradient(145deg,${editColor}DD,${editColor}88)`;
+  const nameEl = document.getElementById('editPreviewName');
+  const light = isLight(editColor);
+  nameEl.style.color = light ? '#1a1a2e' : '#fff';
+  nameEl.style.textShadow = light ? '0 1px 2px rgba(0,0,0,.1)' : '0 1px 3px rgba(0,0,0,.4)';
+  nameEl.textContent = nm;
+  const scaledMax = Math.max(10, Math.round(fs * pv / sz));
+  fitName(nameEl, pv, pv, scaledMax, false);
 }
 
 /* ══════════════════════════════════
@@ -1576,7 +1886,7 @@ function removeCat(i) {
 }
 
 /* ══════════════════════════════════
-   ADD SHORTCUT
+   ADD SHORTCUT（簡素化：名称/URL中心）
 ══════════════════════════════════ */
 function addShortcut() {
   const cat  = document.getElementById('catSelect').value;
@@ -1585,9 +1895,9 @@ function addShortcut() {
   const size = parseInt(document.getElementById('sizeSlider').value);
   const fs   = parseInt(document.getElementById('fontSlider').value);
   if (!name) { toast('作業名を入力してください','error'); return; }
-  const icon = selIcon || '🔗';
+  const color = userSelectedColor ? selColor : catColor(cat);
   const pos = findFree(size);
-  state.shortcuts.push({ id:state.nextId++, category:cat, name, url, color:selColor, icon, x:pos.x, y:pos.y, w:size, h:size, fontSize:fs, memo:'' });
+  state.shortcuts.push({ id:state.nextId++, category:cat, name, url, color, x:pos.x, y:pos.y, w:size, h:size, fontSize:fs, memo:'' });
   save(); renderCanvas(); updateCount(); updatePreview(); toast('追加しました');
   document.getElementById('scName').value = '';
   document.getElementById('scUrl').value  = '';
@@ -1609,7 +1919,6 @@ function renderCanvas() {
   const cv = document.getElementById('canvas');
   cv.querySelectorAll('.sc-btn,.group-frame,.empty-hint').forEach(e => e.remove());
 
-  // Frames
   if (activeFilter === 'all') {
     (state.frames||[]).forEach(f => {
       const el = document.createElement('div'); el.className = 'group-frame'; el.dataset.fid = f.id;
@@ -1628,13 +1937,12 @@ function renderCanvas() {
     });
   }
 
-  // Shortcuts
   const filtered = activeFilter === 'all' ? state.shortcuts : state.shortcuts.filter(s => s.category === activeFilter);
 
   if (!filtered.length && (activeFilter !== 'all' || !(state.frames||[]).length)) {
     const h = document.createElement('div'); h.className = 'empty-hint';
-    h.innerHTML = '<div class="icon">📌</div><p>' + (activeFilter === 'all' ? 'ヘッダーの「＋ 新規作成」かサイドバーからショートカットを追加' : 'このカテゴリーにはショートカットがありません') + '</p>';
-    cv.appendChild(h); return;
+    h.innerHTML = '<div class="icon">📌</div><p>' + (activeFilter === 'all' ? 'ヘッダーの「＋ 新規作成」「📥 Excelから一括作成」かサイドバーから追加' : 'このカテゴリーにはショートカットがありません') + '</p>';
+    cv.appendChild(h); renderConnectors(); return;
   }
 
   filtered.forEach(s => {
@@ -1642,13 +1950,10 @@ function renderCanvas() {
     const light = isLight(s.color);
     const txtCol = light ? '#1a1a2e' : '#fff';
     const txtShadow = light ? '0 1px 2px rgba(0,0,0,.1)' : '0 1px 3px rgba(0,0,0,.4)';
-    const iconBg = light ? 'rgba(0,0,0,.1)' : 'rgba(255,255,255,.15)';
     el.className = 'sc-btn'; el.dataset.id = s.id;
     el.style.cssText = `left:${s.x}px;top:${s.y}px;width:${w}px;height:${h}px;background:linear-gradient(145deg,${s.color}DD,${s.color}88);color:${txtCol};`;
-    // メモのプレーンテキスト（Markdown記号を除去して表示）
     const memoPlain = (s.memo||'').replace(/^#{1,3} /gm,'').replace(/\*\*/g,'').replace(/\*/g,'').replace(/`/g,'').replace(/^[-*] /gm,'・').replace(/^\d+\. /gm,'').trim();
     const hasMemo = memoPlain.length > 0;
-    // メモ枠はボタン高さが100px以上の時のみ表示
     const showMemoBar = hasMemo && h >= 100;
     el.innerHTML = `
       <div class="drag-zone"></div>
@@ -1658,16 +1963,13 @@ function renderCanvas() {
         <button class="sc-action memo-btn" title="メモ">📝</button>
         <button class="sc-action del del-btn" title="削除">✕</button>
       </div>
-      <div class="sc-content" style="padding-bottom:${showMemoBar?'50px':'12px'};padding-top:12px">
-        <div class="sc-icon" style="background:${iconBg};font-size:${isNumIcon(s.icon)?(numIconVal(s.icon).length>=4?'10px':'12px'):'20px'};font-family:${isNumIcon(s.icon)?'\'DM Mono\',monospace':''};font-weight:${isNumIcon(s.icon)?'700':''};letter-spacing:0">${iconDisplay(s.icon)}</div>
-        <div class="sc-name" style="font-size:${fs}px;text-shadow:${txtShadow}">${esc(s.name)}</div>
-        <div class="sc-cat" style="text-shadow:${txtShadow}">${esc(s.category)}</div>
+      <div class="sc-content" style="padding-bottom:${showMemoBar?'46px':'10px'};padding-top:10px">
+        <div class="sc-name" style="text-shadow:${txtShadow}">${esc(s.name)}</div>
       </div>
       ${showMemoBar ? `<div class="sc-memo-preview${light?' light':''}" title="クリックでメモを表示">${esc(memoPlain)}</div>` : ''}
     `;
     el.querySelector('.drag-zone').addEventListener('mousedown', e => {
-      if (e.button===2) return;
-      startDrag(el, e.clientX, e.clientY, 'sc'); e.preventDefault();
+      if (e.button===2) return; startDrag(el, e.clientX, e.clientY, 'sc'); e.preventDefault();
     });
     el.querySelector('.drag-zone').addEventListener('touchstart', e => {
       const t = e.touches[0], rect = el.getBoundingClientRect();
@@ -1685,8 +1987,23 @@ function renderCanvas() {
     el.querySelector('.del-btn').addEventListener('click', e => { e.stopPropagation(); deleteShortcut(s.id); });
     el.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); ctxId = s.id; showCtx(e.clientX, e.clientY); });
     cv.appendChild(el);
+    fitName(el.querySelector('.sc-name'), w, h, s.fontSize, showMemoBar);
   });
   renderConnectors();
+}
+// 作業名をボタン内で可能な限り大きく表示する自動フィット
+function fitName(nameEl, w, h, maxFs, hasMemoBar) {
+  if (!nameEl) return;
+  const availW = w - 20;
+  const availH = h - 20 - (hasMemoBar ? 40 : 0);
+  const upper = Math.max(10, maxFs || 48);
+  const lower = 9;
+  let chosen = lower;
+  for (let fs = upper; fs >= lower; fs--) {
+    nameEl.style.fontSize = fs + 'px';
+    if (nameEl.scrollWidth <= availW && nameEl.scrollHeight <= availH) { chosen = fs; break; }
+  }
+  nameEl.style.fontSize = chosen + 'px';
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function hexAlpha(hex, a) { const c=hex.replace('#',''); const r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16); return `rgba(${r},${g},${b},${a})`; }
@@ -1716,6 +2033,7 @@ function onMM(e) {
   const cv = document.getElementById('canvas'), cr = cv.getBoundingClientRect();
   dragEl.style.left = Math.max(0, e.clientX - cr.left - dragOffsetX + cv.scrollLeft) + 'px';
   dragEl.style.top  = Math.max(0, e.clientY - cr.top  - dragOffsetY + cv.scrollTop)  + 'px';
+  if (dragType === 'sc') renderConnectors();
 }
 function onMU() {
   if (isResizing) return endResize();
@@ -1770,29 +2088,21 @@ function editShortcut(id) {
   document.getElementById('editUrl').value   = s.url;
   document.getElementById('editSizeSlider').value = s.w||120;
   document.getElementById('editSizeLabel').textContent = s.w||120;
-  document.getElementById('editFontSlider').value = s.fontSize||14;
-  document.getElementById('editFontLabel').textContent = s.fontSize||14;
+  document.getElementById('editFontSlider').value = s.fontSize||60;
+  document.getElementById('editFontLabel').textContent = s.fontSize||60;
   document.getElementById('editMemo').value  = s.memo||'';
-  editColor = s.color; editIcon = s.icon;
-  rCP('editColorPicker', editColor, c => { editColor=c; rCP('editColorPicker', editColor, arguments.callee); });
-  rIP('editIconPicker',  editIcon,  i => { editIcon =i; rIP('editIconPicker',  editIcon,  arguments.callee); });
-  // 数字アイコンの場合は入力欄に復元
-  const numInp  = document.getElementById('editIconNumberInput');
-  const numPrev = document.getElementById('editIconNumberPreview');
-  if (isNumIcon(s.icon)) {
-    const num = numIconVal(s.icon);
-    numInp.value = num; numPrev.textContent = num;
-    numPrev.style.fontSize = num.length >= 4 ? '9px' : num.length >= 3 ? '10px' : '12px';
-  } else { numInp.value = ''; numPrev.textContent = ''; }
+  editColor = s.color;
+  rCP('editColorPicker', editColor, c => { editColor=c; rCP('editColorPicker', editColor, arguments.callee); updateEditPreview(); });
   syncMemoPreview(); switchMemoTab('edit');
   document.getElementById('editOverlay').classList.add('open');
+  updateEditPreview();
 }
 function saveEdit() {
   const s = state.shortcuts.find(x=>x.id===editingId); if(!s) return;
   s.category = document.getElementById('editCat').value;
   s.name     = document.getElementById('editName').value.trim() || s.name;
   s.url      = document.getElementById('editUrl').value.trim()  || s.url;
-  s.color    = editColor; s.icon = editIcon;
+  s.color    = editColor;
   s.w        = parseInt(document.getElementById('editSizeSlider').value); s.h = s.w;
   s.fontSize = parseInt(document.getElementById('editFontSlider').value);
   s.memo     = document.getElementById('editMemo').value;
@@ -1810,36 +2120,25 @@ function openMemoPopup(id, cardEl) {
   const s = state.shortcuts.find(x=>x.id===id); if(!s) return;
   memoPopupId = id;
   const popup = document.getElementById('memoPopup');
-
-  // populate
   const iconEl = document.getElementById('mpIcon');
-  iconEl.textContent = iconDisplay(s.icon);
-  iconEl.style.background = hexAlpha(s.color, 0.2);
-  iconEl.style.fontSize = isNumIcon(s.icon) ? (numIconVal(s.icon).length >= 4 ? '10px' : '12px') : '18px';
-  iconEl.style.fontFamily = isNumIcon(s.icon) ? "'DM Mono',monospace" : '';
-  iconEl.style.fontWeight = isNumIcon(s.icon) ? '700' : '';
+  iconEl.textContent = '';
+  iconEl.style.background = s.color;
   document.getElementById('mpName').textContent = s.name;
   document.getElementById('mpBody').innerHTML = renderMd(s.memo||'');
-
-  // position: カードの上側中央に表示
   popup.style.display = 'flex';
-  const popW = 460, popH = Math.min(520, popup.scrollHeight + 60);
+  const ps = state.popupSettings || {size:'m'};
+  const sz = POPUP_SIZE[ps.size] || POPUP_SIZE.m;
+  const popW = sz.w, popH = Math.min(sz.h, popup.scrollHeight + 60);
   const rect = cardEl.getBoundingClientRect();
   const vw = window.innerWidth, vh = window.innerHeight;
-
   let left = rect.left + rect.width/2 - popW/2;
   let top  = rect.top - popH - 10;
-
-  // 画面外補正
   if (left < 8) left = 8;
   if (left + popW > vw - 8) left = vw - popW - 8;
-  if (top < 8) top = rect.bottom + 10; // 上に収まらなければ下に
-
+  if (top < 8) top = rect.bottom + 10;
   popup.style.left = left + 'px';
   popup.style.top  = top  + 'px';
   popup.style.transformOrigin = top > rect.top ? 'top center' : 'bottom center';
-
-  // 外側クリックで閉じる
   setTimeout(() => document.addEventListener('click', onPopupOutside), 10);
 }
 function onPopupOutside(e) {
@@ -1852,10 +2151,7 @@ function closeMemoPopup() {
   document.removeEventListener('click', onPopupOutside);
 }
 function editFromPopup()  { closeMemoPopup(); openMemoModal(memoPopupId); }
-function openFromPopup()  {
-  const s = state.shortcuts.find(x=>x.id===memoPopupId);
-  if (s && s.url) window.open(s.url,'_blank','noopener,noreferrer');
-}
+function openFromPopup()  { const s = state.shortcuts.find(x=>x.id===memoPopupId); if (s && s.url) window.open(s.url,'_blank','noopener,noreferrer'); }
 
 /* ══════════════════════════════════
    MEMO VIEW (read-only modal)
@@ -1865,24 +2161,15 @@ function openMemoView(id) {
   const s = state.shortcuts.find(x=>x.id===id); if(!s) return;
   memoViewId = id;
   const iconEl = document.getElementById('memoViewIcon');
-  iconEl.textContent = iconDisplay(s.icon);
-  iconEl.style.background = hexAlpha(s.color, 0.2);
-  iconEl.style.fontSize = isNumIcon(s.icon) ? (numIconVal(s.icon).length >= 4 ? '10px' : '12px') : '20px';
-  iconEl.style.fontFamily = isNumIcon(s.icon) ? "'DM Mono',monospace" : '';
-  iconEl.style.fontWeight = isNumIcon(s.icon) ? '700' : '';
+  iconEl.textContent = '';
+  iconEl.style.background = s.color;
   document.getElementById('memoViewName').textContent = s.name;
   document.getElementById('memoViewCat').textContent  = s.category;
   document.getElementById('memoViewBody').innerHTML   = renderMd(s.memo||'');
   document.getElementById('memoViewOverlay').classList.add('open');
 }
-function openMemoEditFromView() {
-  document.getElementById('memoViewOverlay').classList.remove('open');
-  openMemoModal(memoViewId);
-}
-function openMemoViewUrl() {
-  const s = state.shortcuts.find(x=>x.id===memoViewId);
-  if (s) window.open(s.url,'_blank','noopener,noreferrer');
-}
+function openMemoEditFromView() { document.getElementById('memoViewOverlay').classList.remove('open'); openMemoModal(memoViewId); }
+function openMemoViewUrl() { const s = state.shortcuts.find(x=>x.id===memoViewId); if (s) window.open(s.url,'_blank','noopener,noreferrer'); }
 
 /* ══════════════════════════════════
    MEMO MODAL (quick edit)
@@ -1912,7 +2199,6 @@ function switchMemoTab(tab) {
   else              { syncMemoPreview(); ta.style.display='none'; pv.style.display=''; et.classList.remove('active'); pt.classList.add('active'); }
 }
 function syncMemoPreview() { document.getElementById('memoPreviewPane').innerHTML = renderMd(document.getElementById('editMemo').value); }
-
 function switchQMemoTab(tab) {
   const ta=document.getElementById('quickMemo'), pv=document.getElementById('quickMemoPreview');
   const et=document.getElementById('memoQEditTab'), pt=document.getElementById('memoQPreviewTab');
@@ -1999,8 +2285,6 @@ function deleteFrame(id) { state.frames=state.frames.filter(f=>f.id!==id); save(
 /* ══════════════════════════════════
    CONNECTOR
 ══════════════════════════════════ */
-
-// コネクタをキャンバス中央に追加
 function addConnector() {
   if (!state.connections) state.connections = [];
   const cv = document.getElementById('canvas');
@@ -2009,56 +2293,40 @@ function addConnector() {
   const cd = state.connDefault || { color:'#4a7bd4', width:2, arrow:'end' };
   const newConn = {
     id: state.nextConnId++,
-    x1: cx - 80, y1: cy,
-    x2: cx + 80, y2: cy,
+    x1: cx - 80, y1: cy, x2: cx + 80, y2: cy,
     snap1: null, snap2: null,
     color: cd.color, width: cd.width, arrow: cd.arrow
   };
   state.connections.push(newConn);
-  connSelectedId = newConn.id;  // 追加直後に選択状態
+  connSelectedId = newConn.id;
   save(); renderConnectors();
   toast('端点をドラッグ。ボタン上でドロップすると追従します');
 }
-
-// ショートカットの中心座標を返す（内部用）
 function scCenter(id) {
   const s = state.shortcuts.find(x=>x.id===id);
   if (!s) return null;
   return { x: s.x + (s.w||140)/2, y: s.y + (s.h||140)/2 };
 }
-
-// ショートカットの4辺中点のうち、座標(px,py)に最も近い点を返す
 function scEdgePoint(id, px, py) {
   const s = state.shortcuts.find(x=>x.id===id);
   if (!s) return scCenter(id);
   const w = s.w||140, h = s.h||140;
   const cx = s.x + w/2, cy = s.y + h/2;
   const candidates = [
-    { x: cx,      y: s.y      },   // 上辺中点
-    { x: cx,      y: s.y + h  },   // 下辺中点
-    { x: s.x,     y: cy       },   // 左辺中点
-    { x: s.x + w, y: cy       },   // 右辺中点
+    { x: cx, y: s.y }, { x: cx, y: s.y + h },
+    { x: s.x, y: cy }, { x: s.x + w, y: cy },
   ];
   return candidates.reduce((best, pt) => {
     const d = Math.hypot(pt.x - px, pt.y - py);
     return d < best.d ? { ...pt, d } : best;
   }, { ...candidates[0], d: Infinity });
 }
-
-// スナップ中のコネクタ座標を解決（snap指定があれば辺中点に上書き）
 function resolvedConn(c) {
   let x1=c.x1, y1=c.y1, x2=c.x2, y2=c.y2;
   if (c.snap1) { const p=scEdgePoint(c.snap1, x2, y2); if(p){x1=p.x;y1=p.y;} }
   if (c.snap2) { const p=scEdgePoint(c.snap2, x1, y1); if(p){x2=p.x;y2=p.y;} }
   return {x1,y1,x2,y2};
 }
-
-// ボタン移動時にスナップ済みコネクタを更新
-function updateSnappedConnectors() {
-  renderConnectors();
-}
-
-// SVGマーカー定義を再構築
 function rebuildMarkers() {
   const defs = document.getElementById('connectorSvg').querySelector('defs');
   defs.innerHTML = '';
@@ -2068,32 +2336,25 @@ function rebuildMarkers() {
     defs.innerHTML += `<marker id="ae-${m}" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="${col}"/></marker><marker id="as-${m}" markerWidth="9" markerHeight="9" refX="1" refY="3" orient="auto-start-reverse"><path d="M0,0 L0,6 L9,3 z" fill="${col}"/></marker>`;
   });
 }
-
 function renderConnectors() {
   rebuildMarkers();
   const g = document.getElementById('connLines');
   if (!g) return;
   g.innerHTML = '';
-
   (state.connections||[]).forEach(c => {
     const col = c.color||'#4a7bd4', bw = c.width||2, arr = c.arrow||'end';
     const m   = col.replace('#','');
     const pos = resolvedConn(c);
     const sel = (c.id === connSelectedId);
     const ns  = 'http://www.w3.org/2000/svg';
-
     const grp = document.createElementNS(ns,'g');
     grp.classList.add('conn-group');
     if (sel) grp.classList.add('conn-selected');
     grp.dataset.cid = c.id;
-
-    // ヒットエリア（線全体移動用）
     const hit = document.createElementNS(ns,'line');
     hit.setAttribute('x1',pos.x1); hit.setAttribute('y1',pos.y1);
     hit.setAttribute('x2',pos.x2); hit.setAttribute('y2',pos.y2);
     hit.classList.add('conn-hitarea');
-
-    // 本体ライン
     const line = document.createElementNS(ns,'line');
     line.setAttribute('x1',pos.x1); line.setAttribute('y1',pos.y1);
     line.setAttribute('x2',pos.x2); line.setAttribute('y2',pos.y2);
@@ -2101,24 +2362,15 @@ function renderConnectors() {
     line.classList.add('conn-line');
     if (arr==='end'||arr==='both') line.setAttribute('marker-end',`url(#ae-${m})`);
     if (arr==='both') line.setAttribute('marker-start',`url(#as-${m})`);
-
-    grp.appendChild(hit);
-    grp.appendChild(line);
-
-    // ハンドルは選択中のみ表示
+    grp.appendChild(hit); grp.appendChild(line);
     if (sel) {
-      // スナップ済みの場合は錠アイコン風に色変更
       const col1 = c.snap1 ? '#2d9e6b' : col;
       const col2 = c.snap2 ? '#2d9e6b' : col;
       const h1 = makeConnHandle(ns, pos.x1, pos.y1, col1, !!c.snap1);
       const h2 = makeConnHandle(ns, pos.x2, pos.y2, col2, !!c.snap2);
-      grp.appendChild(h1);
-      grp.appendChild(h2);
-      addConnDrag(h1, c.id, 'p1');
-      addConnDrag(h2, c.id, 'p2');
+      grp.appendChild(h1); grp.appendChild(h2);
+      addConnDrag(h1, c.id, 'p1'); addConnDrag(h2, c.id, 'p2');
     }
-
-    // ヒットエリアクリック・ドラッグ（選択 + 移動を同時に処理）
     hit.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
       e.stopPropagation(); e.preventDefault();
@@ -2131,28 +2383,20 @@ function renderConnectors() {
       conn.x1=pos.x1; conn.y1=pos.y1; conn.x2=pos.x2; conn.y2=pos.y2;
       conn.snap1=null; conn.snap2=null;
       connDragOX1=conn.x1; connDragOY1=conn.y1; connDragOX2=conn.x2; connDragOY2=conn.y2;
-      // DOM再構築せず選択ハイライトだけ更新
       document.querySelectorAll('#connLines .conn-group').forEach(g2 =>
         g2.classList.toggle('conn-selected', g2.dataset.cid == c.id));
     });
-
-    // 線全体ドラッグはmousedownで統合処理済み（addConnDragは端点のみ）
-
-    // 右クリック
     grp.addEventListener('contextmenu', e => {
       e.preventDefault(); e.stopPropagation();
-      connCtxId = c.id;
-      connSelectedId = c.id;
+      connCtxId = c.id; connSelectedId = c.id;
       const menu = document.getElementById('connCtxMenu');
       menu.style.left = e.clientX+'px'; menu.style.top = e.clientY+'px';
       menu.classList.add('open');
       renderConnectors();
     });
-
     g.appendChild(grp);
   });
 }
-
 function makeConnHandle(ns, x, y, col, snapped) {
   const grp = document.createElementNS(ns,'g');
   grp.classList.add('conn-handle');
@@ -2164,7 +2408,6 @@ function makeConnHandle(ns, x, y, col, snapped) {
   inner.setAttribute('cx',x); inner.setAttribute('cy',y); inner.setAttribute('r',4);
   inner.setAttribute('fill',col);
   grp.appendChild(outer); grp.appendChild(inner);
-  // スナップ済みは鍵マーク
   if (snapped) {
     const t = document.createElementNS(ns,'text');
     t.setAttribute('x',x); t.setAttribute('y',y-13);
@@ -2175,11 +2418,9 @@ function makeConnHandle(ns, x, y, col, snapped) {
   }
   return grp;
 }
-
 let connDragId=null, connDragType=null;
 let connDragSX=0, connDragSY=0;
 let connDragOX1=0, connDragOY1=0, connDragOX2=0, connDragOY2=0;
-
 function addConnDrag(el, cid, type) {
   const start = (cx,cy) => {
     const c = (state.connections||[]).find(x=>x.id===cid); if(!c) return;
@@ -2192,23 +2433,14 @@ function addConnDrag(el, cid, type) {
     if (type==='move') { c.snap1=null; c.snap2=null; }
     connDragOX1=c.x1; connDragOY1=c.y1; connDragOX2=c.x2; connDragOY2=c.y2;
     connSelectedId = cid;
-    // ドラッグ開始時はDOM再構築せず選択表示だけ更新
     document.querySelectorAll('#connLines .conn-group').forEach(g =>
       g.classList.toggle('conn-selected', g.dataset.cid == cid));
   };
   el.addEventListener('mousedown', e => { if(e.button!==0) return; e.stopPropagation(); e.preventDefault(); start(e.clientX,e.clientY); });
   el.addEventListener('touchstart', e => { e.stopPropagation(); e.preventDefault(); start(e.touches[0].clientX,e.touches[0].clientY); },{passive:false});
 }
-
-function onConnMouseMove(e) {
-  if(connDragId===null) return;
-  updateConnPos(e.clientX-connDragSX, e.clientY-connDragSY);
-}
-function onConnTouchMove(e) {
-  if(connDragId===null) return;
-  e.preventDefault();
-  updateConnPos(e.touches[0].clientX-connDragSX, e.touches[0].clientY-connDragSY);
-}
+function onConnMouseMove(e) { if(connDragId===null) return; updateConnPos(e.clientX-connDragSX, e.clientY-connDragSY); }
+function onConnTouchMove(e) { if(connDragId===null) return; e.preventDefault(); updateConnPos(e.touches[0].clientX-connDragSX, e.touches[0].clientY-connDragSY); }
 function updateConnPos(dx,dy) {
   const c=(state.connections||[]).find(x=>x.id===connDragId); if(!c) return;
   if(connDragType==='move'){ c.x1=connDragOX1+dx; c.y1=connDragOY1+dy; c.x2=connDragOX2+dx; c.y2=connDragOY2+dy; }
@@ -2216,16 +2448,13 @@ function updateConnPos(dx,dy) {
   else if(connDragType==='p2'){ c.x2=connDragOX2+dx; c.y2=connDragOY2+dy; }
   renderConnectors();
 }
-
 function onConnMouseUp(e) {
   if(connDragId===null) return;
   const c=(state.connections||[]).find(x=>x.id===connDragId);
   if(c && (connDragType==='p1'||connDragType==='p2')) {
-    // ドロップ位置がショートカットボタン上かチェック → スナップ
     const snapId = findScAtPoint(e.clientX, e.clientY);
     if (snapId !== null) {
-      if (connDragType==='p1') c.snap1=snapId;
-      else                     c.snap2=snapId;
+      if (connDragType==='p1') c.snap1=snapId; else c.snap2=snapId;
       toast('🔒 スナップしました');
     }
   }
@@ -2238,16 +2467,11 @@ function onConnTouchEnd(e) {
   if(c && (connDragType==='p1'||connDragType==='p2') && e.changedTouches.length) {
     const t=e.changedTouches[0];
     const snapId = findScAtPoint(t.clientX, t.clientY);
-    if (snapId !== null) {
-      if (connDragType==='p1') c.snap1=snapId;
-      else                     c.snap2=snapId;
-    }
+    if (snapId !== null) { if (connDragType==='p1') c.snap1=snapId; else c.snap2=snapId; }
   }
   save(); renderConnectors();
   connDragId=null; connDragType=null;
 }
-
-// クライアント座標からショートカットボタンを検索
 function findScAtPoint(cx, cy) {
   const cv = document.getElementById('canvas');
   const rect = cv.getBoundingClientRect();
@@ -2259,17 +2483,13 @@ function findScAtPoint(cx, cy) {
   });
   return s ? s.id : null;
 }
-
-// キャンバスの空白クリックで選択解除
 function onCanvasClick(e) {
   if (e.target === document.getElementById('canvas') ||
       e.target === document.getElementById('connectorSvg') ||
       e.target.classList.contains('canvas')) {
-    connSelectedId = null;
-    renderConnectors();
+    connSelectedId = null; renderConnectors();
   }
 }
-
 function connCtxDelete() {
   state.connections=(state.connections||[]).filter(c=>c.id!==connCtxId);
   if(connSelectedId===connCtxId) connSelectedId=null;
@@ -2306,48 +2526,6 @@ function saveConnEdit() {
   document.getElementById('connEditOverlay').classList.remove('open');
   toast('コネクタを更新しました');
 }
-/* ══════════════════════════════════
-   EXPORT / IMPORT
-══════════════════════════════════ */
-function exportJSON() {
-  const b = new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
-  const a = document.createElement('a'); a.href=URL.createObjectURL(b);
-  a.download='shortcuts_'+(new Date().toISOString().slice(0,10))+'.json'; a.click();
-  toast('JSONをダウンロードしました');
-}
-function importData() {
-  document.getElementById('importText').value=''; document.getElementById('importFile').value='';
-  document.getElementById('importOverlay').classList.add('open');
-}
-function closeImportModal() { document.getElementById('importOverlay').classList.remove('open'); }
-function doImport() {
-  const f=document.getElementById('importFile').files[0], t=document.getElementById('importText').value.trim();
-  if (f) { const r=new FileReader(); r.onload=e=>{ try{applyImport(JSON.parse(e.target.result));}catch{toast('JSON解析エラー','error');} }; r.readAsText(f); }
-  else if (t) { try{applyImport(JSON.parse(t));}catch{toast('JSON解析エラー','error');} }
-  else toast('ファイルかテキストを指定してください','error');
-}
-function applyImport(d) {
-  if (d.categories) state.categories=[...new Set([...state.categories,...d.categories])];
-  if (d.shortcuts) {
-    const mx=state.shortcuts.reduce((m,s)=>Math.max(m,s.id),0);
-    d.shortcuts.forEach((s,i)=>{s.id=mx+i+1; if(!s.memo)s.memo=''; state.shortcuts.push(s);});
-    state.nextId=state.shortcuts.reduce((m,s)=>Math.max(m,s.id),0)+1;
-  }
-  if (d.frames) {
-    const mf=(state.frames||[]).reduce((m,f)=>Math.max(m,f.id),0);
-    d.frames.forEach((f,i)=>{f.id=mf+i+1; state.frames.push(f);});
-    state.nextFrameId=(state.frames||[]).reduce((m,f)=>Math.max(m,f.id),0)+1;
-  }
-  if (d.connections) {
-    // インポート前にマイグレーション（d内で処理）
-    const tmpState = { shortcuts: state.shortcuts, connections: d.connections, nextConnId: d.nextConnId||1 };
-    migrateConnections(tmpState);
-    const mc=(state.connections||[]).reduce((m,c)=>Math.max(m,c.id||0),0);
-    tmpState.connections.forEach((c,i)=>{c.id=mc+i+1; (state.connections=state.connections||[]).push(c);});
-    state.nextConnId=(state.connections||[]).reduce((m,c)=>Math.max(m,c.id||0),0)+1;
-  }
-  save(); populateCatSelects(); renderCanvas(); updateCount(); closeImportModal(); toast('インポートしました');
-}
 
 /* ══════════════════════════════════
    UI HELPERS
@@ -2362,6 +2540,10 @@ function switchTab(tab) {
   document.getElementById('tabSc').style.display = tab==='sc' ? '' : 'none';
   document.getElementById('tabSettings').style.display = tab==='settings' ? '' : 'none';
 }
+function toggleAdv() {
+  const t = document.getElementById('advToggle'), b = document.getElementById('advBody');
+  t.classList.toggle('open'); b.classList.toggle('open');
+}
 function closeOnBg(e, id) { if(e.target===document.getElementById(id)) document.getElementById(id).classList.remove('open'); }
 
 function toast(msg, type='success') {
@@ -2375,26 +2557,36 @@ function toast(msg, type='success') {
 ══════════════════════════════════ */
 function init() {
   loadGasUrl(); loadState(); applyBg();
-  // ピッカーを確実に描画（エラー分離）
   try { buildPickers(); } catch(e) { console.error('buildPickers error:', e); }
   try {
     buildBgPicker('bgPickerSidebar', state.canvasBg, c => { state.canvasBg=c; applyBg(); save(); buildBgPicker('bgPickerSidebar',state.canvasBg,arguments.callee); });
-  // サイドバーのコネクタデフォルト初期化
-  const cd = state.connDefault || { color:'#4a7bd4', width:2, arrow:'end' };
-  connDefaultColor = cd.color;
-  document.getElementById('connDefaultWidthSliderSidebar').value = cd.width;
-  document.getElementById('connDefaultWidthLabelSidebar').textContent = cd.width;
-  document.getElementById('connDefaultArrowSidebar').value = cd.arrow;
-  buildConnDefaultColorPicker();
-  applyPopupSettings();
+    const cd = state.connDefault || { color:'#4a7bd4', width:2, arrow:'end' };
+    connDefaultColor = cd.color;
+    document.getElementById('connDefaultWidthSliderSidebar').value = cd.width;
+    document.getElementById('connDefaultWidthLabelSidebar').textContent = cd.width;
+    document.getElementById('connDefaultArrowSidebar').value = cd.arrow;
+    buildConnDefaultColorPicker();
+    applyPopupSettings();
   } catch(e) {}
   populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount(); updatePreview();
   setupPin('savePinGroup'); setupPin('loadPinGroup');
+
   document.getElementById('scName').addEventListener('input', updatePreview);
   document.getElementById('sizeSlider').addEventListener('input', e => { document.getElementById('sizeLabel').textContent=e.target.value; updatePreview(); });
   document.getElementById('fontSlider').addEventListener('input', e => { document.getElementById('fontLabel').textContent=e.target.value; updatePreview(); });
-  document.getElementById('editSizeSlider').addEventListener('input', e => document.getElementById('editSizeLabel').textContent=e.target.value);
-  document.getElementById('editFontSlider').addEventListener('input', e => document.getElementById('editFontLabel').textContent=e.target.value);
+  document.getElementById('editSizeSlider').addEventListener('input', e => { document.getElementById('editSizeLabel').textContent=e.target.value; updateEditPreview(); });
+  document.getElementById('editFontSlider').addEventListener('input', e => { document.getElementById('editFontLabel').textContent=e.target.value; updateEditPreview(); });
+  document.getElementById('editName').addEventListener('input', updateEditPreview);
+
+  document.getElementById('excelFile').addEventListener('change', e => handleExcelFile(e.target.files[0]));
+  const dz = document.getElementById('excelDropzone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    if (e.dataTransfer.files.length) handleExcelFile(e.dataTransfer.files[0]);
+  });
+
   document.addEventListener('click', hideCtx);
   document.addEventListener('mousemove', e => { onMM(e); onConnMouseMove(e); });
   document.addEventListener('mouseup',   e => { onMU();  onConnMouseUp(e); });
@@ -2402,14 +2594,12 @@ function init() {
   document.addEventListener('touchend',  e => { onTE();  onConnTouchEnd(e); });
   document.getElementById('canvas').addEventListener('click', onCanvasClick);
   if (!GAS_URL) setTimeout(()=>toast('⚙ 設定からGAS API URLを設定してください','error'), 600);
-  // ピッカーが空の場合に再試行
   setTimeout(() => {
     const cp = document.getElementById('colorPicker');
     if (cp && cp.children.length === 0) buildPickers();
   }, 100);
 }
 
-// ピッカーをDOMロード直後に即時描画（initより前に実行）
 document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('colorPicker').children.length === 0) buildPickers();
 });
