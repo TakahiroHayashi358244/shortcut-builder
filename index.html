@@ -577,7 +577,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0531b</span>
+    <span class="logo-ver">v3 build0531c</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -2534,13 +2534,20 @@ function init() {
   document.getElementById('editFontSlider').addEventListener('input', e => { document.getElementById('editFontLabel').textContent=e.target.value; updateEditPreview(); });
   document.getElementById('editName').addEventListener('input', updateEditPreview);
 
-  document.getElementById('excelFile').addEventListener('change', e => handleExcelFile(e.target.files[0]));
+  document.getElementById('excelFile').addEventListener('change', e => { handleExcelFile(e.target.files[0]); e.target.value=''; });
   const dz = document.getElementById('excelDropzone');
-  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='copy'; dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', e => { e.preventDefault(); e.stopPropagation(); dz.classList.remove('dragover'); });
   dz.addEventListener('drop', e => {
-    e.preventDefault(); dz.classList.remove('dragover');
-    if (e.dataTransfer.files.length) handleExcelFile(e.dataTransfer.files[0]);
+    e.preventDefault(); e.stopPropagation(); dz.classList.remove('dragover');
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) handleExcelFile(f);
+  });
+  // ページ外（ゾーン以外）にドロップしてブラウザがファイルを開いてしまうのを防止
+  window.addEventListener('dragover', e => { e.preventDefault(); });
+  window.addEventListener('drop', e => {
+    // Excelモーダルが開いていない、またはドロップゾーン外なら、ブラウザのデフォルト（ファイルを開く）を止める
+    if (!e.target.closest || !e.target.closest('#excelDropzone')) { e.preventDefault(); }
   });
 
   document.addEventListener('click', hideCtx);
