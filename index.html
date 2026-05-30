@@ -212,18 +212,61 @@ textarea.input{resize:vertical;line-height:1.65}
 ══════════════════════════════════ */
 .sc-btn{
   position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
-  border-radius:var(--r);border:1px solid rgba(0,0,0,.12);
-  user-select:none;z-index:10;overflow:hidden;transition:box-shadow .2s,transform .2s;
+  border-radius:16px;border:1px solid rgba(0,0,0,.18);
+  user-select:none;z-index:10;overflow:hidden;
+  transition:box-shadow .18s ease,transform .12s ease,filter .18s ease;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,.45),
+    inset 0 -3px 6px rgba(0,0,0,.22),
+    0 3px 0 rgba(0,0,0,.18),
+    0 6px 14px rgba(0,0,0,.22);
 }
-.sc-btn:hover{box-shadow:0 10px 32px rgba(0,0,0,.18);z-index:20}
-.sc-btn.dragging{box-shadow:0 20px 56px rgba(0,0,0,.25);z-index:1000;transition:none;transform:scale(1.04)}
+/* 上面の光沢 */
+.sc-btn::before{
+  content:'';position:absolute;left:0;right:0;top:0;height:48%;
+  background:linear-gradient(to bottom,rgba(255,255,255,.32),rgba(255,255,255,0));
+  border-radius:16px 16px 50% 50%/16px 16px 22px 22px;
+  pointer-events:none;z-index:2;
+}
+.sc-btn:hover{
+  transform:translateY(-2px);z-index:20;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,.5),
+    inset 0 -3px 6px rgba(0,0,0,.22),
+    0 5px 0 rgba(0,0,0,.18),
+    0 12px 26px rgba(0,0,0,.28);
+}
+.sc-btn:active{
+  transform:translateY(2px);
+  box-shadow:
+    inset 0 2px 5px rgba(0,0,0,.3),
+    inset 0 1px 0 rgba(255,255,255,.25),
+    0 1px 0 rgba(0,0,0,.18),
+    0 3px 8px rgba(0,0,0,.22);
+}
+.sc-btn.dragging{box-shadow:0 22px 56px rgba(0,0,0,.32);z-index:1000;transition:none;transform:scale(1.05) translateY(-2px);filter:brightness(1.03)}
 .sc-btn .drag-zone{position:absolute;inset:0;cursor:grab;z-index:3}
 .sc-btn.dragging .drag-zone{cursor:grabbing}
-.sc-btn .link-zone{position:absolute;top:20%;left:20%;right:20%;bottom:20%;cursor:pointer;z-index:5;border-radius:6px;transition:background .15s}
-.sc-btn .link-zone:hover{background:rgba(255,255,255,.09)}
+.sc-btn .link-zone{position:absolute;top:18%;left:18%;right:18%;bottom:18%;cursor:pointer;z-index:5;border-radius:10px;transition:background .15s}
+.sc-btn .link-zone:hover{background:rgba(255,255,255,.12)}
 .sc-btn .sc-content{position:relative;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;pointer-events:none;width:100%;height:100%;padding:10px}
 .sc-btn .sc-name{font-weight:800;text-align:center;line-height:1.2;word-break:break-word;max-width:100%;width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;letter-spacing:-.2px}
 .sc-btn .sc-cat{display:none}
+/* プレビュー用：ボタンと同じ立体感 */
+.sc-preview{
+  border-radius:16px;border:1px solid rgba(0,0,0,.18);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,.45),
+    inset 0 -3px 6px rgba(0,0,0,.22),
+    0 3px 0 rgba(0,0,0,.18),
+    0 6px 14px rgba(0,0,0,.22);
+}
+.sc-preview::before{
+  content:'';position:absolute;left:0;right:0;top:0;height:48%;
+  background:linear-gradient(to bottom,rgba(255,255,255,.32),rgba(255,255,255,0));
+  border-radius:16px 16px 50% 50%/16px 16px 22px 22px;
+  pointer-events:none;z-index:2;
+}
 /* memo badge on canvas */
 .sc-btn .sc-memo-dot{position:absolute;top:5px;left:5px;width:7px;height:7px;border-radius:50%;background:var(--accent);opacity:.8;z-index:6}
 /* action buttons */
@@ -571,7 +614,7 @@ textarea.input{resize:vertical;line-height:1.65}
           <div style="margin-top:10px">
             <div class="s-label">プレビュー</div>
             <div class="preview-wrap">
-              <div id="previewBtn" style="position:relative;width:120px;height:120px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.09);overflow:hidden;flex-shrink:0;padding:10px">
+              <div id="previewBtn" class="sc-preview" style="position:relative;width:120px;height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;padding:10px">
                 <div id="previewName" style="font-size:24px;font-weight:800;text-align:center;line-height:1.2;text-shadow:0 1px 3px rgba(0,0,0,.4);width:100%;word-break:break-word;overflow:hidden">作業名</div>
               </div>
             </div>
@@ -748,7 +791,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="form-group">
     <label>プレビュー</label>
     <div class="preview-wrap" style="padding:6px 0 10px">
-      <div id="editPreviewBtn" style="position:relative;border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.09);overflow:hidden;flex-shrink:0;padding:10px">
+      <div id="editPreviewBtn" class="sc-preview" style="position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;padding:10px">
         <div id="editPreviewName" style="font-weight:800;text-align:center;line-height:1.2;text-shadow:0 1px 3px rgba(0,0,0,.4);width:100%;word-break:break-word;overflow:hidden">作業名</div>
       </div>
     </div>
@@ -1812,7 +1855,7 @@ function updatePreview() {
   // プレビュー枠は最大140pxに制限（実寸との比率を保つ）
   const pv = Math.min(sz, 140);
   p.style.width = pv + 'px'; p.style.height = pv + 'px';
-  p.style.background = `linear-gradient(145deg,${selColor}DD,${selColor}88)`;
+  p.style.background = `linear-gradient(to bottom,${selColor},${selColor}C8 55%,${selColor}9E)`;
   const nameEl = document.getElementById('previewName');
   nameEl.textContent = nm;
   // 実寸ボタン(sz)での最大文字サイズをプレビュー縮尺に換算
@@ -1829,7 +1872,7 @@ function updateEditPreview() {
   const fs = parseInt(document.getElementById('editFontSlider').value);
   const pv = Math.min(sz, 140);
   p.style.width = pv + 'px'; p.style.height = pv + 'px';
-  p.style.background = `linear-gradient(145deg,${editColor}DD,${editColor}88)`;
+  p.style.background = `linear-gradient(to bottom,${editColor},${editColor}C8 55%,${editColor}9E)`;
   const nameEl = document.getElementById('editPreviewName');
   const light = isLight(editColor);
   nameEl.style.color = light ? '#1a1a2e' : '#fff';
@@ -1951,7 +1994,7 @@ function renderCanvas() {
     const txtCol = light ? '#1a1a2e' : '#fff';
     const txtShadow = light ? '0 1px 2px rgba(0,0,0,.1)' : '0 1px 3px rgba(0,0,0,.4)';
     el.className = 'sc-btn'; el.dataset.id = s.id;
-    el.style.cssText = `left:${s.x}px;top:${s.y}px;width:${w}px;height:${h}px;background:linear-gradient(145deg,${s.color}DD,${s.color}88);color:${txtCol};`;
+    el.style.cssText = `left:${s.x}px;top:${s.y}px;width:${w}px;height:${h}px;background:linear-gradient(to bottom,${s.color},${s.color}C8 55%,${s.color}9E);color:${txtCol};`;
     const memoPlain = (s.memo||'').replace(/^#{1,3} /gm,'').replace(/\*\*/g,'').replace(/\*/g,'').replace(/`/g,'').replace(/^[-*] /gm,'・').replace(/^\d+\. /gm,'').trim();
     const hasMemo = memoPlain.length > 0;
     const showMemoBar = hasMemo && h >= 100;
@@ -2020,19 +2063,54 @@ function updateCount() {
 /* ══════════════════════════════════
    DRAG / RESIZE
 ══════════════════════════════════ */
+let dragFrameChildren = [];   // 枠と一緒に動かすボタン {id, el, baseX, baseY}
+let dragFrameBaseX = 0, dragFrameBaseY = 0;
 function startDrag(el, cx, cy, type) {
   isDragging = true; dragEl = el; dragType = type;
   dragId = parseInt(type === 'frame' ? el.dataset.fid : el.dataset.id);
   const r = el.getBoundingClientRect();
   dragOffsetX = cx - r.left; dragOffsetY = cy - r.top;
   el.classList.add('dragging');
+  dragFrameChildren = [];
+  if (type === 'frame') {
+    const f = (state.frames||[]).find(x=>x.id===dragId);
+    if (f) {
+      dragFrameBaseX = f.x; dragFrameBaseY = f.y;
+      // 枠の矩形内（中心が枠内）にあるボタンを子として収集
+      state.shortcuts.forEach(s => {
+        const sw = s.w||130, sh = s.h||130;
+        const cxp = s.x + sw/2, cyp = s.y + sh/2;
+        if (cxp >= f.x && cxp <= f.x + f.w && cyp >= f.y && cyp <= f.y + f.h) {
+          const childEl = document.querySelector(`.sc-btn[data-id="${s.id}"]`);
+          dragFrameChildren.push({ id: s.id, el: childEl, baseX: s.x, baseY: s.y });
+        }
+      });
+    }
+  }
+}
+function moveFrameChildren(newFrameX, newFrameY) {
+  const dx = newFrameX - dragFrameBaseX, dy = newFrameY - dragFrameBaseY;
+  dragFrameChildren.forEach(c => {
+    const nx = c.baseX + dx, ny = c.baseY + dy;
+    if (c.el) { c.el.style.left = nx + 'px'; c.el.style.top = ny + 'px'; }
+  });
+}
+function commitFrameChildren(newFrameX, newFrameY) {
+  const dx = newFrameX - dragFrameBaseX, dy = newFrameY - dragFrameBaseY;
+  dragFrameChildren.forEach(c => {
+    const s = state.shortcuts.find(x=>x.id===c.id);
+    if (s) { s.x = c.baseX + dx; s.y = c.baseY + dy; }
+  });
 }
 function onMM(e) {
   if (isResizing) return doResize(e.clientX, e.clientY);
   if (!isDragging || !dragEl) return;
   const cv = document.getElementById('canvas'), cr = cv.getBoundingClientRect();
-  dragEl.style.left = Math.max(0, e.clientX - cr.left - dragOffsetX + cv.scrollLeft) + 'px';
-  dragEl.style.top  = Math.max(0, e.clientY - cr.top  - dragOffsetY + cv.scrollTop)  + 'px';
+  const nx = Math.max(0, e.clientX - cr.left - dragOffsetX + cv.scrollLeft);
+  const ny = Math.max(0, e.clientY - cr.top  - dragOffsetY + cv.scrollTop);
+  dragEl.style.left = nx + 'px';
+  dragEl.style.top  = ny + 'px';
+  if (dragType === 'frame' && dragFrameChildren.length) { moveFrameChildren(nx, ny); renderConnectors(); }
   if (dragType === 'sc') renderConnectors();
 }
 function onMU() {
@@ -2040,15 +2118,22 @@ function onMU() {
   if (!isDragging || !dragEl) return;
   isDragging = false; dragEl.classList.remove('dragging');
   if (dragType === 'sc') { const s = state.shortcuts.find(x=>x.id===dragId); if(s){s.x=parseInt(dragEl.style.left);s.y=parseInt(dragEl.style.top);save();renderConnectors();} }
-  else if (dragType === 'frame') { const f = (state.frames||[]).find(x=>x.id===dragId); if(f){f.x=parseInt(dragEl.style.left);f.y=parseInt(dragEl.style.top);save();} }
+  else if (dragType === 'frame') {
+    const f = (state.frames||[]).find(x=>x.id===dragId);
+    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); save(); renderConnectors(); }
+  }
+  dragFrameChildren = [];
   dragEl = null;
 }
 function onTM(e) {
   if (isResizing) { e.preventDefault(); return doResize(e.touches[0].clientX, e.touches[0].clientY); }
   if (!isDragging || !dragEl) return; e.preventDefault();
   const t = e.touches[0], cv = document.getElementById('canvas'), cr = cv.getBoundingClientRect();
-  dragEl.style.left = Math.max(0, t.clientX - cr.left - dragOffsetX + cv.scrollLeft) + 'px';
-  dragEl.style.top  = Math.max(0, t.clientY - cr.top  - dragOffsetY + cv.scrollTop)  + 'px';
+  const nx = Math.max(0, t.clientX - cr.left - dragOffsetX + cv.scrollLeft);
+  const ny = Math.max(0, t.clientY - cr.top  - dragOffsetY + cv.scrollTop);
+  dragEl.style.left = nx + 'px';
+  dragEl.style.top  = ny + 'px';
+  if (dragType === 'frame' && dragFrameChildren.length) { moveFrameChildren(nx, ny); renderConnectors(); }
   if (dragType === 'sc') renderConnectors();
 }
 function onTE() {
@@ -2056,7 +2141,11 @@ function onTE() {
   if (!isDragging || !dragEl) return;
   isDragging = false; dragEl.classList.remove('dragging');
   if (dragType === 'sc') { const s = state.shortcuts.find(x=>x.id===dragId); if(s){s.x=parseInt(dragEl.style.left);s.y=parseInt(dragEl.style.top);save();renderConnectors();} }
-  else if (dragType === 'frame') { const f = (state.frames||[]).find(x=>x.id===dragId); if(f){f.x=parseInt(dragEl.style.left);f.y=parseInt(dragEl.style.top);save();} }
+  else if (dragType === 'frame') {
+    const f = (state.frames||[]).find(x=>x.id===dragId);
+    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); save(); renderConnectors(); }
+  }
+  dragFrameChildren = [];
   dragEl = null;
 }
 function startResize(el, fid, cx, cy) { isResizing=true; resizeEl=el; resizeId=fid; resizeStartX=cx; resizeStartY=cy; resizeStartW=el.offsetWidth; resizeStartH=el.offsetHeight; }
