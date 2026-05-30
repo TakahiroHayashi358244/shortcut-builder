@@ -577,7 +577,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0530c</span>
+    <span class="logo-ver">v3 build0530d</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -1185,6 +1185,7 @@ function loadState() {
     if (!state.nextConnId) state.nextConnId = 1;
     if (!state.connDefault) state.connDefault = { color:'#4a7bd4', width:2, arrow:'end' };
     if (!state.popupSettings) state.popupSettings = { size:'m', font:'m' };
+    normalizeState(state);
     migrateConnections(state);
   } catch(e) {}
 }
@@ -1518,6 +1519,37 @@ async function doRename() {
   } catch(e) { toast('通信エラー','error'); }
 }
 
+// 読み込んだデータの型を正規化（古いボードでドラッグ不能になる問題の根本対策）
+function normalizeState(st) {
+  if (!st) return;
+  st.shortcuts = (st.shortcuts||[]).map(s => {
+    s.id = parseInt(s.id);
+    s.x = Number(s.x); if (!isFinite(s.x)) s.x = 20;
+    s.y = Number(s.y); if (!isFinite(s.y)) s.y = 20;
+    s.w = parseInt(s.w) || 130;
+    s.h = parseInt(s.h) || 130;
+    if (s.fontSize != null) s.fontSize = parseInt(s.fontSize) || 60;
+    if (!s.color) s.color = '#4a7bd4';
+    if (typeof s.memo !== 'string') s.memo = s.memo == null ? '' : String(s.memo);
+    if (!s.category) s.category = (st.categories && st.categories[0]) || '未分類';
+    return s;
+  });
+  st.frames = (st.frames||[]).map(f => {
+    f.id = parseInt(f.id);
+    f.x = Number(f.x); if (!isFinite(f.x)) f.x = 40;
+    f.y = Number(f.y); if (!isFinite(f.y)) f.y = 40;
+    f.w = parseInt(f.w) || 300;
+    f.h = parseInt(f.h) || 200;
+    if (!f.color) f.color = FRAME_COLORS[0];
+    return f;
+  });
+  // nextId 系を実データの最大値+1に補正
+  const maxSc = st.shortcuts.reduce((m,s)=>Math.max(m, s.id||0), 0);
+  const maxFr = st.frames.reduce((m,f)=>Math.max(m, f.id||0), 0);
+  if (!st.nextId || st.nextId <= maxSc) st.nextId = maxSc + 1;
+  if (!st.nextFrameId || st.nextFrameId <= maxFr) st.nextFrameId = maxFr + 1;
+}
+
 function migrateConnections(st) {
   if (!st.connections) { st.connections = []; return; }
   if (!st.nextConnId) st.nextConnId = 1;
@@ -1557,6 +1589,7 @@ async function doCloudLoad() {
       if (!state.nextFrameId) state.nextFrameId = 1;
       if (!state.canvasBg) state.canvasBg = '#0c0e14';
       state.shortcuts = (state.shortcuts||[]).map(s => ({memo:'', ...s}));
+      normalizeState(state);
       migrateConnections(state);
       applyBg(); save(); populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount();
       currentPin = pin;
@@ -2064,6 +2097,10 @@ function renderCanvas() {
   }
 
   filtered.forEach(s => {
+    // 古いデータの欠損補完（color無し・座標無し等で描画が壊れるのを防ぐ）
+    if (!s.color) s.color = '#4a7bd4';
+    if (typeof s.x !== 'number') s.x = parseInt(s.x) || 20;
+    if (typeof s.y !== 'number') s.y = parseInt(s.y) || 20;
     const el = document.createElement('div'), w = s.w||120, h = s.h||120, fs = s.fontSize||14;
     const light = isLight(s.color);
     const txtCol = light ? '#1a1a2e' : '#fff';
@@ -2124,10 +2161,10 @@ function fitName(nameEl, w, h, maxFs, hasMemoBar) {
   nameEl.style.fontSize = chosen + 'px';
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-function hexAlpha(hex, a) { const c=hex.replace('#',''); const r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16); return `rgba(${r},${g},${b},${a})`; }
+function hexAlpha(hex, a) { const c=String(hex||'#999999').replace('#',''); const r=parseInt(c.substr(0,2),16)||0,g=parseInt(c.substr(2,2),16)||0,b=parseInt(c.substr(4,2),16)||0; return `rgba(${r},${g},${b},${a})`; }
 function isLight(hex) {
-  const c = hex.replace('#','');
-  const r = parseInt(c.substr(0,2),16), g = parseInt(c.substr(2,2),16), b = parseInt(c.substr(4,2),16);
+  const c = String(hex||'#999999').replace('#','');
+  const r = parseInt(c.substr(0,2),16)||0, g = parseInt(c.substr(2,2),16)||0, b = parseInt(c.substr(4,2),16)||0;
   return (r*299 + g*587 + b*114)/1000 > 160;
 }
 function updateCount() {
