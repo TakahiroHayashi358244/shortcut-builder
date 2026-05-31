@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -602,10 +601,11 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0531r</span>
+    <span class="logo-ver">v3 build0601c</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
+    <button class="btn" id="undoBtn" onclick="undo()" disabled title="直前の操作を取り消す">↶ 戻す</button>
     <button class="btn btn-create" id="createToggleBtn" onclick="toggleCreatePanel()">＋ ボタン作成</button>
     <button class="btn btn-primary" onclick="confirmNewLayout()">＋ 新規ボード作成</button>
     <button class="btn btn-excel" onclick="openExcelModal()">📥 Excelから一括作成</button>
@@ -1126,6 +1126,34 @@ let excelParsed = null;
 /* ══════════════════════════════════
    STORAGE
 ══════════════════════════════════ */
+// ───── 元に戻す（Undo）─────
+let undoStack = [];
+const UNDO_LIMIT = 30;
+const LEFT_MARGIN = 40; // 枠の左端の基準（これより左へは出さない）
+// 操作の「前」に現在の状態を退避する
+function pushUndo() {
+  try {
+    undoStack.push(JSON.stringify(state));
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    updateUndoBtn();
+  } catch(e) {}
+}
+function undo() {
+  if (!undoStack.length) return;
+  const prev = undoStack.pop();
+  try {
+    state = JSON.parse(prev);
+    save();
+    populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount();
+    updateUndoBtn();
+    toast('元に戻しました');
+  } catch(e) { toast('戻せませんでした','error'); }
+}
+function updateUndoBtn() {
+  const b = document.getElementById('undoBtn');
+  if (b) b.disabled = undoStack.length === 0;
+}
+
 function save() {
   try { localStorage.setItem('sb_v8', JSON.stringify(state)); } catch(e) {}
 }
@@ -1651,6 +1679,7 @@ function renderExcelPreview(items, colIdx) {
 
 function applyExcel() {
   if (!excelParsed || !excelParsed.length) { toast('先にExcelを読み込んでください','error'); return; }
+  pushUndo();
   const clearFirst = document.getElementById('excelClearFirst').checked;
   if (clearFirst) {
     state.shortcuts = []; state.frames = []; state.connections = [];
@@ -1740,6 +1769,7 @@ function applyAlign() {
   const basis = document.getElementById('alignBasis').value;
   const keepFrames = document.getElementById('alignKeepFrames').checked;
   if (!state.shortcuts.length) { toast('整列するボタンがありません','error'); return; }
+  pushUndo();
 
   if (!keepFrames) { state.frames = []; state.nextFrameId = 1; }
 
@@ -1769,16 +1799,30 @@ function layoutGroups(groups, basis) {
   const FRAME_TOP = 40;
   const FRAME_GAP_X = 36;
   const FRAME_GAP_Y = 56;
-  const START_X = 40, START_Y = 50;
+  const START_X = LEFT_MARGIN, START_Y = 50;
 
   const maxItems = Math.max(...groupArr.map(([,a]) => a.length));
 
+  const MEMO_H = 22;
+  const hasMemoS = (s) => !!(s.memo && String(s.memo).trim());
+  // arr を c 列で並べたとき、2行目以降のメモ行の追加余白合計
+  const memoExtra = (arr, c) => {
+    const rows = Math.ceil(arr.length / c);
+    let ex = 0;
+    for (let r = 1; r < rows; r++) {
+      for (let k = 0; k < c; k++) {
+        const idx = r * c + k;
+        if (idx < arr.length && hasMemoS(arr[idx])) { ex += MEMO_H; break; }
+      }
+    }
+    return ex;
+  };
   function evalLayout(BTN, colsPerGroup, framesPerRow) {
     const frames = groupArr.map(([key, arr]) => {
       const c = Math.min(colsPerGroup, arr.length);
       const rows = Math.ceil(arr.length / c);
       const innerW = c * BTN + (c - 1) * GAP;
-      const innerH = rows * BTN + (rows - 1) * GAP;
+      const innerH = rows * BTN + (rows - 1) * GAP + memoExtra(arr, c);
       return { w: innerW + FRAME_PAD*2, h: innerH + FRAME_PAD + FRAME_TOP, key, arr, c };
     });
     let totalH = START_Y, maxRowW = 0;
@@ -1834,8 +1878,16 @@ function layoutGroups(groups, basis) {
 
     arr.forEach((s, idx) => {
       const cI = idx % c, rI = Math.floor(idx / c);
+      // この行より上にあるメモ行の余白を累積
+      let ex = 0;
+      for (let r = 1; r <= rI; r++) {
+        for (let k = 0; k < c; k++) {
+          const j = r * c + k;
+          if (j < arr.length && hasMemoS(arr[j])) { ex += MEMO_H; break; }
+        }
+      }
       s.x = frameX + FRAME_PAD + cI * (BTN + GAP);
-      s.y = frameY + FRAME_TOP + rI * (BTN + GAP);
+      s.y = frameY + FRAME_TOP + rI * (BTN + GAP) + ex;
       s.w = BTN; s.h = BTN;
     });
 
@@ -2026,6 +2078,7 @@ function addShortcut() {
   if (!name) { toast('作業名を入力してください','error'); return; }
   const color = userSelectedColor ? selColor : catColor(cat);
   const pos = findFree(size);
+  pushUndo();
   state.shortcuts.push({ id:state.nextId++, category:cat, name, url, color, x:pos.x, y:pos.y, w:size, h:size, fontSize:fs, memo:'' });
   save(); renderCanvas(); updateCount(); updatePreview(); toast('追加しました');
   document.getElementById('scName').value = '';
@@ -2152,6 +2205,7 @@ function updateCount() {
 let dragFrameChildren = [];   // 枠と一緒に動かすボタン {id, el, baseX, baseY}
 let dragFrameBaseX = 0, dragFrameBaseY = 0;
 function startDrag(el, cx, cy, type) {
+  pushUndo();
   isDragging = true; dragEl = el; dragType = type;
   dragId = parseInt(type === 'frame' ? el.dataset.fid : el.dataset.id);
   const r = el.getBoundingClientRect();
@@ -2194,7 +2248,8 @@ function onMM(e) {
   const cv = document.getElementById('canvas'), cr = cv.getBoundingClientRect();
   const TAB_H = 36;
   const minTop = dragType === 'frame' ? TAB_H : 0; // 枠はタブが上に出るので上端を確保
-  const nx = Math.max(0, e.clientX - cr.left - dragOffsetX + cv.scrollLeft);
+  const minLeftX = dragType === 'frame' ? LEFT_MARGIN : 0;
+  const nx = Math.max(minLeftX, e.clientX - cr.left - dragOffsetX + cv.scrollLeft);
   const ny = Math.max(minTop, e.clientY - cr.top  - dragOffsetY + cv.scrollTop);
   dragEl.style.left = nx + 'px';
   dragEl.style.top  = ny + 'px';
@@ -2211,7 +2266,7 @@ function onMU() {
   }
   else if (dragType === 'frame') {
     const f = (state.frames||[]).find(x=>x.id===dragId);
-    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); resolveFrameOverlaps(f.id, buildOwnership(f.id)); save(); renderCanvas(); }
+    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; f.w=+f.w; f.h=+f.h; commitFrameChildren(nx,ny); const mk=dragFrameChildren.map(c=>state.shortcuts.find(x=>x.id===c.id)).filter(Boolean); insertFrameBetween(f, mk); save(); renderCanvas(); }
   }
   dragFrameChildren = [];
   dragEl = null;
@@ -2222,7 +2277,8 @@ function onTM(e) {
   const t = e.touches[0], cv = document.getElementById('canvas'), cr = cv.getBoundingClientRect();
   const TAB_H = 36;
   const minTop = dragType === 'frame' ? TAB_H : 0;
-  const nx = Math.max(0, t.clientX - cr.left - dragOffsetX + cv.scrollLeft);
+  const minLeftX = dragType === 'frame' ? LEFT_MARGIN : 0;
+  const nx = Math.max(minLeftX, t.clientX - cr.left - dragOffsetX + cv.scrollLeft);
   const ny = Math.max(minTop, t.clientY - cr.top  - dragOffsetY + cv.scrollTop);
   dragEl.style.left = nx + 'px';
   dragEl.style.top  = ny + 'px';
@@ -2239,12 +2295,12 @@ function onTE() {
   }
   else if (dragType === 'frame') {
     const f = (state.frames||[]).find(x=>x.id===dragId);
-    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); resolveFrameOverlaps(f.id, buildOwnership(f.id)); save(); renderCanvas(); }
+    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; f.w=+f.w; f.h=+f.h; commitFrameChildren(nx,ny); const mk=dragFrameChildren.map(c=>state.shortcuts.find(x=>x.id===c.id)).filter(Boolean); insertFrameBetween(f, mk); save(); renderCanvas(); }
   }
   dragFrameChildren = [];
   dragEl = null;
 }
-function startResize(el, fid, cx, cy) { isResizing=true; resizeEl=el; resizeId=fid; resizeStartX=cx; resizeStartY=cy; resizeStartW=el.offsetWidth; resizeStartH=el.offsetHeight; }
+function startResize(el, fid, cx, cy) { pushUndo(); isResizing=true; resizeEl=el; resizeId=fid; resizeStartX=cx; resizeStartY=cy; resizeStartW=el.offsetWidth; resizeStartH=el.offsetHeight; }
 function doResize(cx, cy) { if(!resizeEl) return; resizeEl.style.width=Math.max(100,resizeStartW+(cx-resizeStartX))+'px'; resizeEl.style.height=Math.max(80,resizeStartH+(cy-resizeStartY))+'px'; }
 function endResize() { if(!resizeEl) return; isResizing=false; const f=(state.frames||[]).find(x=>x.id===resizeId); if(f){f.w=parseInt(resizeEl.style.width);f.h=parseInt(resizeEl.style.height);save();} resizeEl=null; }
 
@@ -2310,22 +2366,47 @@ function reflowFrame(f, kids, movedId) {
   // 並び順：現在位置（上→下、左→右）。movedはドロップ位置の順序で自然に挿入される。
   const ordered = kids.slice().sort((a,b) => (a.y - b.y) || (a.x - b.x));
 
-  // 左上起点でグリッド配置（左→右、cols で折り返して下へ）
+  // メモタブの高さ（ボタン上端より上に出る分）
+  const MEMO_H = 22;
+  const hasMemo = (s) => !!(s.memo && String(s.memo).trim());
+  const rowCount = Math.ceil(n / cols);
+  // 各行にメモ付きボタンがあるか
+  const rowHasMemo = [];
+  for (let r = 0; r < rowCount; r++) {
+    let any = false;
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      if (idx < n && hasMemo(ordered[idx])) { any = true; break; }
+    }
+    rowHasMemo[r] = any;
+  }
+
+  // 左上起点でグリッド配置（左→右、cols で折り返して下へ）。メモ行は上に余白を足す。
   const baseX = f.x + PAD;
   const baseY = f.y + TOP;
+  const rowY = []; // 各行のY座標
+  let cy = baseY;
+  for (let r = 0; r < rowCount; r++) {
+    // 先頭行以外で、その行にメモがあるなら上に余白を足す
+    if (r > 0 && rowHasMemo[r]) cy += MEMO_H;
+    rowY[r] = cy;
+    cy += BTN + GAP;
+  }
   ordered.forEach((s, i) => {
     const cI = i % cols, rI = Math.floor(i / cols);
     s.x = baseX + cI * (BTN + GAP);
-    s.y = baseY + rI * (BTN + GAP);
+    s.y = rowY[rI];
     s.w = BTN; s.h = BTN;
   });
 
   // 枠サイズを中身に合わせる（左上は固定）。列数を状態として保存。
   const usedCols = Math.min(cols, n);
-  const usedRows = Math.ceil(n / cols);
+  const usedRows = rowCount;
   f.cols = cols;
+  // メモ行の追加余白を高さに反映
+  const extraMemo = rowHasMemo.slice(1).filter(Boolean).length * MEMO_H;
   let nw = Math.max(MIN_W, usedCols * BTN + (usedCols - 1) * GAP + PAD*2);
-  let nh = Math.max(MIN_H, usedRows * BTN + (usedRows - 1) * GAP + TOP + PAD);
+  let nh = Math.max(MIN_H, usedRows * BTN + (usedRows - 1) * GAP + TOP + PAD + extraMemo);
 
   // 上の壁：名札(タブ)がボード上端より上に出ないよう、枠上端を TAB_H 以上に保つ。
   let nx = f.x, ny = f.y;
@@ -2334,9 +2415,9 @@ function reflowFrame(f, kids, movedId) {
     ny = TAB_H;
     ordered.forEach(s => { s.y += shift; });
   }
-  if (nx < 0) {
-    const shift = -nx;
-    nx = 0;
+  if (nx < LEFT_MARGIN) {
+    const shift = LEFT_MARGIN - nx;
+    nx = LEFT_MARGIN;
     ordered.forEach(s => { s.x += shift; });
   }
   f.x = nx; f.y = ny; f.w = nw; f.h = nh;
@@ -2383,17 +2464,176 @@ function reflowAllFrames(movedId) {
   });
   // 枠どうしが重なる場合は避ける。所属は確定マップを使い回す。
   resolveFrameOverlaps(null, ownership);
+  // 段ごとに上端の高さを揃える
+  alignFrameRows(ownership);
 }
 
-// 2つの枠が重なっているか
+// 2つの枠が重なっているか（座標は数値化して判定）
 function framesOverlap(a, b) {
-  return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+  const ax=+a.x, ay=+a.y, aw=+a.w, ah=+a.h, bx=+b.x, by=+b.y, bw=+b.w, bh=+b.h;
+  return !(ax + aw <= bx || bx + bw <= ax || ay + ah <= by || by + bh <= ay);
+}
+// 移動してきた枠 mf を、重なっている他の枠から押し出す（他の枠とその中身は一切動かさない）。
+// 移動してきた枠 mf はドロップ位置に固定し、重なる枠を左右に振り分けて割り込む。
+// 押された枠がさらに他の枠に重なれば連鎖して同方向へ押す。
+// 左へ押した結果ボード左端(0)を割り込む場合は、左端を固定して全体を右へ流して調整する。
+function insertFrameBetween(mf, movedKids) {
+  const GAP = 20, TAB_H = 36;
+  const frames = state.frames || [];
+  mf.x=+mf.x; mf.y=+mf.y; mf.w=+mf.w; mf.h=+mf.h;
+  frames.forEach(f => { f.x=+f.x; f.y=+f.y; f.w=+f.w; f.h=+f.h; });
+
+  const movedIds = new Set(movedKids.map(s => s.id));
+  // 所属を「動かす前」に一度だけ確定する（枠が重なった最中に判定すると取りこぼすため）。
+  // mf の子は movedKids。それ以外の枠の子は、mf の子を除いて現座標で割り当て。
+  const ownership = {};
+  frames.forEach(f => { ownership[f.id] = []; });
+  ownership[mf.id] = movedKids.slice();
+  const claimed = new Set(movedIds);
+  state.shortcuts.forEach(s => {
+    if (claimed.has(s.id)) return;
+    for (const f of frames) {
+      if (f.id === mf.id) continue;
+      if (scInFrame(s, f)) { ownership[f.id].push(s); claimed.add(s.id); break; }
+    }
+  });
+  const kidsOf = (fr) => ownership[fr.id] || [];
+  const moveFr = (fr, dx, dy) => {
+    fr.x += dx; fr.y += dy;
+    kidsOf(fr).forEach(s => { s.x = (+s.x) + dx; s.y = (+s.y) + dy; });
+  };
+
+  // mf と縦方向に重なり（行が重なる）かつ横で重なる枠だけを対象にする
+  const rowOverlap = (a, b) => Math.min(a.y+a.h, b.y+b.h) - Math.max(a.y, b.y) > 0;
+
+  // mf に重なる枠を、mf の中心より左にあるか右にあるかで振り分け
+  const overlapping = frames.filter(o => o.id !== mf.id && framesOverlap(mf, o));
+  const leftFrames  = overlapping.filter(o => (o.x + o.w/2) <  (mf.x + mf.w/2)).sort((a,b)=>b.x-a.x); // mfに近い順
+  const rightFrames = overlapping.filter(o => (o.x + o.w/2) >= (mf.x + mf.w/2)).sort((a,b)=>a.x-b.x);
+
+  // 右側：mf の右端から順に詰める。連鎖（さらに右の枠と重なれば押す）。
+  let cursorR = mf.x + mf.w + GAP;
+  const pushRightChain = (fr) => {
+    const dx = cursorR - fr.x;
+    if (dx !== 0) moveFr(fr, dx, 0);
+    cursorR = fr.x + fr.w + GAP;
+    frames.forEach(o => {
+      if (o.id === fr.id || o.id === mf.id) return;
+      if (framesOverlap(fr, o) && rowOverlap(fr, o) && (o.x + o.w/2) >= (fr.x + fr.w/2)) pushRightChain(o);
+    });
+  };
+  rightFrames.forEach(pushRightChain);
+
+  // 左側：mf の左端から順に左へ詰める。連鎖（押した先の枠とも重なれば続けて押す）。
+  const leftMoved = [];
+  let cursorL = mf.x - GAP;
+  const pushLeftChain = (fr) => {
+    const dx = (cursorL - fr.w) - fr.x;
+    if (dx !== 0) moveFr(fr, dx, 0);
+    leftMoved.push(fr);
+    cursorL = fr.x - GAP;
+    frames.forEach(o => {
+      if (o.id === fr.id || o.id === mf.id || leftMoved.includes(o)) return;
+      if (framesOverlap(fr, o) && rowOverlap(fr, o) && (o.x + o.w/2) < (fr.x + fr.w/2)) pushLeftChain(o);
+    });
+  };
+  leftFrames.forEach(pushLeftChain);
+
+  // 左へ詰めた結果、左端(LEFT_MARGIN)を割り込むなら、はみ出し分だけ全体を右へ流す
+  if (leftMoved.length) {
+    const minLeft = Math.min(...leftMoved.map(f => f.x));
+    if (minLeft < LEFT_MARGIN) {
+      const shift = LEFT_MARGIN - minLeft;
+      moveFr(mf, shift, 0);
+      leftMoved.forEach(fr => moveFr(fr, shift, 0));
+      rightFrames.forEach(fr => moveFr(fr, shift, 0));
+    }
+  }
+
+  // タブの上端の壁（全関係枠）
+  const clampTop = (fr, kids) => {
+    if (fr.y < TAB_H) { const sh = TAB_H - fr.y; fr.y = TAB_H; kids.forEach(s => { s.y = (+s.y) + sh; }); }
+    if (fr.x < LEFT_MARGIN) { const sh = LEFT_MARGIN - fr.x; fr.x = LEFT_MARGIN; kids.forEach(s => { s.x = (+s.x) + sh; }); }
+  };
+  clampTop(mf, movedKids);
+  [...leftFrames, ...rightFrames].forEach(fr => clampTop(fr, kidsOf(fr)));
+
+  // 総仕上げ：割り込み後に残った枠どうしの重なりを、左側の枠を基準に右の枠を押して解消する。
+  // mf は固定。左から順に走査し、重なっていれば右側の枠を右へずらす（連鎖的に解消）。
+  const sorted = frames.slice().sort((a,b)=>a.x-b.x);
+  let pass = 0;
+  let dirty = true;
+  while (dirty && pass++ < 50) {
+    dirty = false;
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i+1; j < sorted.length; j++) {
+        const a = sorted[i], b = sorted[j];
+        if (!framesOverlap(a, b) || !rowOverlap(a, b)) continue;
+        // 右側の枠を動かす。ただし mf は固定したいので、b が mf なら a を左へ動かす…のではなく
+        // mf を含むペアは mf 以外を動かす。
+        let mover = (b.id === mf.id) ? a : b;
+        let fixed = (mover === a) ? b : a;
+        if (mover.id === mf.id) { mover = fixed; fixed = mf; } // 念のため mf を mover にしない
+        const dx = (fixed.x + fixed.w + GAP) - mover.x;
+        if (dx > 0) { moveFr(mover, dx, 0); dirty = true; }
+      }
+    }
+  }
+
+  // 段ごとに上端の高さを揃える
+  alignFrameRows(ownership);
 }
 // 枠を dx,dy 動かす（所属ボタンも一緒に動かす）。ownershipKids が渡されればそれを使う。
 function moveFrameBy(f, dx, dy, ownershipKids) {
   const kids = ownershipKids || state.shortcuts.filter(s => scInFrame(s, f));
   f.x += dx; f.y += dy;
   kids.forEach(s => { s.x += dx; s.y += dy; });
+}
+// 全枠を「段（行）」ごとにグループ分けし、各段の上端を、その段で最も左にある枠の高さに揃える。
+// 段の判定：枠の上端どうしが近い（重なり行がある）ものを同じ段とみなす。
+function alignFrameRows(ownership) {
+  const frames = (state.frames || []).slice();
+  if (frames.length < 2) return;
+  frames.forEach(f => { f.x=+f.x; f.y=+f.y; f.w=+f.w; f.h=+f.h; });
+  const kidsOf = (f) => (ownership && ownership[f.id]) ? ownership[f.id]
+                        : state.shortcuts.filter(s => scInFrame(s, f));
+  // 上端が近い枠を同じ段にまとめる（縦の重なりがあれば同段）
+  const used = new Set();
+  const rows = [];
+  // 上端の昇順で処理
+  frames.sort((a,b) => a.y - b.y);
+  frames.forEach(f => {
+    if (used.has(f.id)) return;
+    const row = [f]; used.add(f.id);
+    frames.forEach(g => {
+      if (used.has(g.id)) return;
+      // f と g の縦範囲が重なれば同じ段とみなす
+      const overlapY = Math.min(f.y+f.h, g.y+g.h) - Math.max(f.y, g.y);
+      if (overlapY > 0) { row.push(g); used.add(g.id); }
+    });
+    rows.push(row);
+  });
+  // 各段で最も左の枠の y に揃える
+  rows.forEach(row => {
+    const leftMost = row.reduce((m, f) => (f.x < m.x ? f : m), row[0]);
+    const targetY = leftMost.y;
+    row.forEach(f => {
+      if (f.id === leftMost.id) return;
+      const dy = targetY - f.y;
+      if (dy !== 0) {
+        f.y += dy;
+        kidsOf(f).forEach(s => { s.y = (+s.y) + dy; });
+      }
+    });
+  });
+  // 揃えた結果、タブがボード上端より上に出ないよう補正
+  const TAB_H = 36;
+  (state.frames || []).forEach(f => {
+    if (f.y < TAB_H) {
+      const sh = TAB_H - f.y; f.y = TAB_H;
+      kidsOf(f).forEach(s => { s.y = (+s.y) + sh; });
+    }
+  });
 }
 // 枠どうしの重なりを解消する。anchorFrameId があればその枠は動かさず他を避ける。
 // ownership: {frameId: kids[]} があれば所属判定に使い回す（避ける最中の所属ズレを防ぐ）。
@@ -2441,10 +2681,10 @@ function resolveFrameOverlaps(anchorFrameId, ownership) {
 function showCtx(x, y) { const m = document.getElementById('ctxMenu'); m.style.left=x+'px'; m.style.top=y+'px'; m.classList.add('open'); }
 function showFCtx(x, y) { const m = document.getElementById('frameCtxMenu'); m.style.left=x+'px'; m.style.top=y+'px'; m.classList.add('open'); }
 function hideCtx() { document.getElementById('ctxMenu').classList.remove('open'); document.getElementById('frameCtxMenu').classList.remove('open'); }
-function ctxOpen()     { const s = state.shortcuts.find(x=>x.id===ctxId); if(s) window.open(s.url,'_blank','noopener,noreferrer'); hideCtx(); }
+function ctxOpen()     { const s = state.shortcuts.find(x=>x.id===ctxId); if(s && s.url) window.open(s.url,'_blank','noopener,noreferrer'); hideCtx(); }
 function ctxEdit()     { editShortcut(ctxId); hideCtx(); }
 function ctxMemo()     { openMemoModal(ctxId); hideCtx(); }
-function ctxDuplicate(){ const s = state.shortcuts.find(x=>x.id===ctxId); if(!s) return; const ns={...s,id:state.nextId++,x:s.x+20,y:s.y+20,memo:s.memo||''}; state.shortcuts.push(ns); reflowAllFrames(ns.id); save(); renderCanvas(); updateCount(); hideCtx(); toast('複製しました'); }
+function ctxDuplicate(){ const s = state.shortcuts.find(x=>x.id===ctxId); if(!s) return; pushUndo(); const ns={...s,id:state.nextId++,x:s.x+20,y:s.y+20,memo:s.memo||''}; state.shortcuts.push(ns); reflowAllFrames(ns.id); save(); renderCanvas(); updateCount(); hideCtx(); toast('複製しました'); }
 function ctxDelete()   { deleteShortcut(ctxId); hideCtx(); }
 function fctxEdit()    { editFrame(fctxId); hideCtx(); }
 function fctxDelete()  { deleteFrame(fctxId); hideCtx(); }
@@ -2481,7 +2721,7 @@ function saveEdit() {
   save(); closeEditModal(); renderCanvas(); toast('保存しました');
 }
 function deleteEditing() { state.shortcuts = state.shortcuts.filter(s=>s.id!==editingId); save(); renderCanvas(); updateCount(); closeEditModal(); toast('削除しました'); }
-function deleteShortcut(id) { state.shortcuts = state.shortcuts.filter(s=>s.id!==id); reflowAllFrames(); save(); renderCanvas(); updateCount(); toast('削除しました'); }
+function deleteShortcut(id) { pushUndo(); state.shortcuts = state.shortcuts.filter(s=>s.id!==id); reflowAllFrames(); save(); renderCanvas(); updateCount(); toast('削除しました'); }
 function closeEditModal() { document.getElementById('editOverlay').classList.remove('open'); editingId=null; }
 
 /* ══════════════════════════════════
@@ -2541,7 +2781,7 @@ function openMemoView(id) {
   document.getElementById('memoViewOverlay').classList.add('open');
 }
 function openMemoEditFromView() { const id=memoViewId; document.getElementById('memoViewOverlay').classList.remove('open'); editShortcut(id); }
-function openMemoViewUrl() { const s = state.shortcuts.find(x=>x.id===memoViewId); if (s) window.open(s.url,'_blank','noopener,noreferrer'); }
+function openMemoViewUrl() { const s = state.shortcuts.find(x=>x.id===memoViewId); if (s && s.url) window.open(s.url,'_blank','noopener,noreferrer'); }
 
 /* ══════════════════════════════════
    MEMO MODAL (quick edit)
@@ -2652,7 +2892,7 @@ function submitFrame() {
   }
   save(); renderCanvas(); closeFrameModal(); toast(frameEditId!==null?'枠を更新しました':'枠を作成しました');
 }
-function deleteFrame(id) { state.frames=state.frames.filter(f=>f.id!==id); save(); renderCanvas(); toast('枠を削除しました'); }
+function deleteFrame(id) { pushUndo(); state.frames=state.frames.filter(f=>f.id!==id); save(); renderCanvas(); toast('枠を削除しました'); }
 
 /* ══════════════════════════════════
    CONNECTOR （機能廃止：互換のためスタブ）
