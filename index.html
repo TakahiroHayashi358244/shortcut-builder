@@ -601,7 +601,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0531f</span>
+    <span class="logo-ver">v3 build0531j</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -1658,42 +1658,25 @@ function applyExcel() {
   const cats = [...new Set(excelParsed.map(i => i.category))];
   cats.forEach(c => { if (!state.categories.includes(c)) state.categories.push(c); });
 
-  const BTN = 130, GAP = 18;
-  const FRAME_PAD = 26;
-  const FRAME_TOP = 44;
-  const FRAME_GAP_Y = 70;
-  const COLS = 4;
-  const START_X = 50, START_Y = 60;
-
-  let cursorY = START_Y;
-
-  cats.forEach(cat => {
-    const itemsInCat = excelParsed.filter(i => i.category === cat);
-    if (!itemsInCat.length) return;
-    const cols = Math.min(COLS, itemsInCat.length);
-    const rows = Math.ceil(itemsInCat.length / cols);
-    const innerW = cols * BTN + (cols - 1) * GAP;
-    const innerH = rows * BTN + (rows - 1) * GAP;
-    const frameW = innerW + FRAME_PAD * 2;
-    const frameH = innerH + FRAME_PAD + FRAME_TOP;
-    const frameX = START_X;
-    const frameY = cursorY;
-    state.frames.push({
-      id: state.nextFrameId++, name: cat, color: frameColorForCat(cat),
-      borderWidth: 3, bgOpacity: 6, x: frameX, y: frameY, w: frameW, h: frameH
-    });
-    itemsInCat.forEach((it, idx) => {
-      const cI = idx % cols, rI = Math.floor(idx / cols);
-      const bx = frameX + FRAME_PAD + cI * (BTN + GAP);
-      const by = frameY + FRAME_TOP + rI * (BTN + GAP);
-      const color = isValidHex(it.color) ? it.color : catColor(cat);
-      state.shortcuts.push({
-        id: state.nextId++, category: cat, name: it.name, url: it.url,
-        color, x: bx, y: by, w: BTN, h: BTN, fontSize: 60, memo: it.memo || ''
-      });
-    });
-    cursorY = frameY + frameH + FRAME_GAP_Y;
+  // まず全ボタンを state に登録（座標は後で整列が決める）
+  const created = []; // {sc, category}
+  excelParsed.forEach(it => {
+    const color = isValidHex(it.color) ? it.color : catColor(it.category);
+    const sc = {
+      id: state.nextId++, category: it.category, name: it.name, url: it.url,
+      color, x: 0, y: 0, w: 130, h: 130, fontSize: 60, memo: it.memo || ''
+    };
+    state.shortcuts.push(sc);
+    created.push(sc);
   });
+
+  // カテゴリーごとにグループ化（Excelの出現順を維持）
+  const groups = new Map();
+  cats.forEach(c => groups.set(c, []));
+  created.forEach(sc => groups.get(sc.category).push(sc));
+
+  // 整列と同じ横並び・1画面フィットのレイアウトを適用
+  layoutGroups(groups, 'category', true);
 
   save(); populateCatSelects(); buildCatTabs(); renderCanvas(); updateCount();
   closeExcelModal();
@@ -1760,29 +1743,36 @@ function applyAlign() {
   if (!keepFrames) { state.frames = []; state.nextFrameId = 1; }
 
   const groups = groupedForAlign(basis);
-  const groupArr = [...groups.entries()];   // [ [key, items], ... ]
-  const G = groupArr.length;
+  const G = groups.size;
+  layoutGroups(groups, basis, true);
 
-  // 利用可能なキャンバス表示領域
+  save(); renderCanvas(); updateCount();
+  closeAlignModal();
+  toast(`${G}グループを整列しました`);
+}
+
+// グループ（Map: key -> shortcut[]）を横並び・1画面フィットで配置し、枠も生成する共通処理
+// basis: 'category' なら枠名=カテゴリ名/色=カテゴリ色、それ以外（色基準）なら枠名=色名/色=その色
+// framesArePrebuilt が false の場合、この関数内で各グループの枠を新規生成する
+function layoutGroups(groups, basis) {
+  const groupArr = [...groups.entries()];
+  const G = groupArr.length;
+  if (!G) return;
+
   const cv = document.getElementById('canvas');
   const availW = Math.max(360, cv.clientWidth  - 40);
   const availH = Math.max(320, cv.clientHeight - 40);
 
-  // レイアウト定数（サイズは自動調整するので基準値）
-  const GAP = 16;            // ボタン間
-  const FRAME_PAD = 22;      // 枠内パディング
-  const FRAME_TOP = 40;      // タブ＋上余白
-  const FRAME_GAP_X = 36;    // 枠どうしの横間隔
-  const FRAME_GAP_Y = 56;    // 枠どうしの縦間隔
+  const GAP = 16;
+  const FRAME_PAD = 22;
+  const FRAME_TOP = 40;
+  const FRAME_GAP_X = 36;
+  const FRAME_GAP_Y = 56;
   const START_X = 40, START_Y = 50;
 
-  // 各グループの最大要素数（列数決定の基準）
   const maxItems = Math.max(...groupArr.map(([,a]) => a.length));
 
-  // ボタンサイズBTNとグループ内列数colsPerGroup、枠を横に並べる数framesPerRowを
-  // 1画面に収まるよう探索（大きいサイズから下げていく）
   function evalLayout(BTN, colsPerGroup, framesPerRow) {
-    // 各グループの枠サイズを算出
     const frames = groupArr.map(([key, arr]) => {
       const c = Math.min(colsPerGroup, arr.length);
       const rows = Math.ceil(arr.length / c);
@@ -1790,7 +1780,6 @@ function applyAlign() {
       const innerH = rows * BTN + (rows - 1) * GAP;
       return { w: innerW + FRAME_PAD*2, h: innerH + FRAME_PAD + FRAME_TOP, key, arr, c };
     });
-    // 枠を framesPerRow 列で行配置し、各行の高さ・全体幅高さを求める
     let totalH = START_Y, maxRowW = 0;
     for (let i = 0; i < frames.length; i += framesPerRow) {
       const rowFrames = frames.slice(i, i + framesPerRow);
@@ -1803,8 +1792,6 @@ function applyAlign() {
     return { frames, totalW, totalH, fits: (totalW <= availW + START_X && totalH <= availH + START_Y) };
   }
 
-  // 探索：BTN 130→70。グループ内も枠配置も「横に広げる」ことを優先するため
-  // colsPerGroup（グループ内列数）と framesPerRow（枠の横並び数）を共に大きい方から試す
   let chosen = null;
   const BTN_SIZES = [130, 120, 110, 100, 92, 84, 76, 70];
   outer:
@@ -1816,7 +1803,6 @@ function applyAlign() {
       }
     }
   }
-  // どうやっても収まらない場合：最小サイズ・横全並びで配置（スクロール許容）
   if (!chosen) {
     const BTN = 70;
     const cpg = Math.max(1, Math.min(maxItems, Math.floor((availW - START_X) / (BTN + GAP))));
@@ -1824,13 +1810,12 @@ function applyAlign() {
     chosen = { BTN, cpg, fpr: Math.max(1, G), ...r };
   }
 
-  const { BTN, cpg: colsPerGroup, fpr: framesPerRow, frames } = chosen;
+  const { BTN, fpr: framesPerRow, frames } = chosen;
 
-  // 実配置：枠を framesPerRow 列で左→右、行が変わったら下へ
   let cursorX = START_X, cursorY = START_Y, rowMaxH = 0, inRow = 0;
   frames.forEach((fr) => {
     const { key, arr, c } = fr;
-    if (inRow === framesPerRow) { // 改行
+    if (inRow === framesPerRow) {
       cursorX = START_X;
       cursorY += rowMaxH + FRAME_GAP_Y;
       rowMaxH = 0; inRow = 0;
@@ -1857,10 +1842,6 @@ function applyAlign() {
     rowMaxH = Math.max(rowMaxH, fr.h);
     inRow++;
   });
-
-  save(); renderCanvas(); updateCount();
-  closeAlignModal();
-  toast(`${G}グループを整列しました`);
 }
 
 function downloadExcelTemplate() {
@@ -2221,7 +2202,10 @@ function onMU() {
   if (isResizing) return endResize();
   if (!isDragging || !dragEl) return;
   isDragging = false; dragEl.classList.remove('dragging');
-  if (dragType === 'sc') { const s = state.shortcuts.find(x=>x.id===dragId); if(s){s.x=parseInt(dragEl.style.left);s.y=parseInt(dragEl.style.top);save();renderConnectors();} }
+  if (dragType === 'sc') {
+    const s = state.shortcuts.find(x=>x.id===dragId);
+    if(s){ s.x=parseInt(dragEl.style.left); s.y=parseInt(dragEl.style.top); reflowAllFrames(dragId); save(); renderCanvas(); }
+  }
   else if (dragType === 'frame') {
     const f = (state.frames||[]).find(x=>x.id===dragId);
     if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); save(); renderConnectors(); }
@@ -2244,7 +2228,10 @@ function onTE() {
   if (isResizing) return endResize();
   if (!isDragging || !dragEl) return;
   isDragging = false; dragEl.classList.remove('dragging');
-  if (dragType === 'sc') { const s = state.shortcuts.find(x=>x.id===dragId); if(s){s.x=parseInt(dragEl.style.left);s.y=parseInt(dragEl.style.top);save();renderConnectors();} }
+  if (dragType === 'sc') {
+    const s = state.shortcuts.find(x=>x.id===dragId);
+    if(s){ s.x=parseInt(dragEl.style.left); s.y=parseInt(dragEl.style.top); reflowAllFrames(dragId); save(); renderCanvas(); }
+  }
   else if (dragType === 'frame') {
     const f = (state.frames||[]).find(x=>x.id===dragId);
     if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); save(); renderConnectors(); }
@@ -2256,6 +2243,103 @@ function startResize(el, fid, cx, cy) { isResizing=true; resizeEl=el; resizeId=f
 function doResize(cx, cy) { if(!resizeEl) return; resizeEl.style.width=Math.max(100,resizeStartW+(cx-resizeStartX))+'px'; resizeEl.style.height=Math.max(80,resizeStartH+(cy-resizeStartY))+'px'; }
 function endResize() { if(!resizeEl) return; isResizing=false; const f=(state.frames||[]).find(x=>x.id===resizeId); if(f){f.w=parseInt(resizeEl.style.width);f.h=parseInt(resizeEl.style.height);save();} resizeEl=null; }
 
+// ボタンが枠に属するかの判定（中心が枠内）。startDragの収集基準と統一。
+function scInFrame(s, f) {
+  const sw = s.w||130, sh = s.h||130;
+  const cx = s.x + sw/2, cy = s.y + sh/2;
+  return cx >= f.x && cx <= f.x + f.w && cy >= f.y && cy <= f.y + f.h;
+}
+
+// 2矩形の重なり量（重なっていなければ null）
+function overlapRect(a, b) {
+  const aw=a.w||130, ah=a.h||130, bw=b.w||130, bh=b.h||130;
+  const ox = Math.min(a.x+aw, b.x+bw) - Math.max(a.x, b.x);
+  const oy = Math.min(a.y+ah, b.y+bh) - Math.max(a.y, b.y);
+  if (ox > 0 && oy > 0) return { ox, oy };
+  return null;
+}
+
+// 枠内で重なりを解消する。moved（ドロップされたボタン）は動かさず固定し、
+// 重なった相手を「重なりが深い方向」へ押しのける。押された相手がさらに重なれば同方向に連鎖。
+// 最後に枠を中身にフィットさせる。
+function reflowFrame(f, movedId) {
+  const PAD = 22, TOP = 40, GAP = 14, MIN_W = 100, MIN_H = 80;
+  const kids = state.shortcuts.filter(s => scInFrame(s, f));
+  if (!kids.length) return;
+
+  // moved を起点に重なり解消（push）。anchor は動かさない集合。
+  const moved = movedId != null ? kids.find(s => s.id === movedId) : null;
+
+  // 押しのけ：rect a に重なっている others を、深い方向へずらす。BFS的に連鎖。
+  function pushAway(anchor) {
+    const queue = [anchor];
+    const fixed = new Set([anchor.id]); // これ以上動かさない（起点と確定済み）
+    let guard = 0;
+    while (queue.length && guard++ < 500) {
+      const cur = queue.shift();
+      kids.forEach(other => {
+        if (other.id === cur.id) return;
+        const ov = overlapRect(cur, other);
+        if (!ov) return;
+        if (fixed.has(other.id)) return; // 既に確定したものは押さない（無限ループ防止）
+        const ow = other.w||130, oh = other.h||130;
+        // 深い方向へ避ける：縦の重なり(oy)が横(ox)より深ければ縦に、そうでなければ横に
+        if (ov.oy <= ov.ox) {
+          // 横方向に避ける：cur の右にずらす（curの中心より右にいれば右、左なら左）
+          if ((other.x + ow/2) >= (cur.x + (cur.w||130)/2)) other.x = cur.x + (cur.w||130) + GAP;
+          else other.x = cur.x - ow - GAP;
+        } else {
+          // 縦方向に避ける：cur の下にずらす（中心が下なら下、上なら上）
+          if ((other.y + oh/2) >= (cur.y + (cur.h||130)/2)) other.y = cur.y + (cur.h||130) + GAP;
+          else other.y = cur.y - oh - GAP;
+        }
+        fixed.add(other.id);
+        queue.push(other);
+      });
+    }
+  }
+
+  if (moved) {
+    pushAway(moved);
+  } else {
+    // moved指定なし（削除・複製など）：左上から順に、後続を前のものと重ならないよう押しのけ
+    const ordered = kids.slice().sort((a,b) => (a.y - b.y) || (a.x - b.x));
+    for (let i = 1; i < ordered.length; i++) {
+      for (let j = 0; j < i; j++) {
+        const ov = overlapRect(ordered[j], ordered[i]);
+        if (!ov) continue;
+        const oh = ordered[i].h||130;
+        // 既存方式に近い：下にずらす
+        ordered[i].y = ordered[j].y + (ordered[j].h||130) + GAP;
+      }
+    }
+  }
+
+  // 枠を中身（全ボタンの外接矩形＋余白）にフィット
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  kids.forEach(s => {
+    const sw=s.w||130, sh=s.h||130;
+    minX=Math.min(minX,s.x); minY=Math.min(minY,s.y);
+    maxX=Math.max(maxX,s.x+sw); maxY=Math.max(maxY,s.y+sh);
+  });
+  f.x = Math.round(minX - PAD);
+  f.y = Math.round(minY - TOP);
+  f.w = Math.max(MIN_W, Math.round((maxX - minX) + PAD*2));
+  f.h = Math.max(MIN_H, Math.round((maxY - minY) + TOP + PAD));
+}
+
+// 全枠を整列＆フィット。movedId はドロップされたボタン。
+function reflowAllFrames(movedId) {
+  const frames = state.frames || [];
+  // 所属を現座標で一括確定（処理中に所属が変わる連鎖を防ぐ）
+  const kidsByFrame = frames.map(f => state.shortcuts.filter(s => scInFrame(s, f)));
+  frames.forEach((f, i) => {
+    if (!kidsByFrame[i].length) return; // 空枠はそのまま
+    const hasMoved = movedId != null && kidsByFrame[i].some(s => s.id === movedId);
+    reflowFrame(f, hasMoved ? movedId : null);
+  });
+}
+
 /* ══════════════════════════════════
    CONTEXT MENU
 ══════════════════════════════════ */
@@ -2265,7 +2349,7 @@ function hideCtx() { document.getElementById('ctxMenu').classList.remove('open')
 function ctxOpen()     { const s = state.shortcuts.find(x=>x.id===ctxId); if(s) window.open(s.url,'_blank','noopener,noreferrer'); hideCtx(); }
 function ctxEdit()     { editShortcut(ctxId); hideCtx(); }
 function ctxMemo()     { openMemoModal(ctxId); hideCtx(); }
-function ctxDuplicate(){ const s = state.shortcuts.find(x=>x.id===ctxId); if(!s) return; state.shortcuts.push({...s,id:state.nextId++,x:s.x+20,y:s.y+20,memo:s.memo||''}); save(); renderCanvas(); updateCount(); hideCtx(); toast('複製しました'); }
+function ctxDuplicate(){ const s = state.shortcuts.find(x=>x.id===ctxId); if(!s) return; const ns={...s,id:state.nextId++,x:s.x+20,y:s.y+20,memo:s.memo||''}; state.shortcuts.push(ns); reflowAllFrames(ns.id); save(); renderCanvas(); updateCount(); hideCtx(); toast('複製しました'); }
 function ctxDelete()   { deleteShortcut(ctxId); hideCtx(); }
 function fctxEdit()    { editFrame(fctxId); hideCtx(); }
 function fctxDelete()  { deleteFrame(fctxId); hideCtx(); }
@@ -2302,7 +2386,7 @@ function saveEdit() {
   save(); closeEditModal(); renderCanvas(); toast('保存しました');
 }
 function deleteEditing() { state.shortcuts = state.shortcuts.filter(s=>s.id!==editingId); save(); renderCanvas(); updateCount(); closeEditModal(); toast('削除しました'); }
-function deleteShortcut(id) { state.shortcuts = state.shortcuts.filter(s=>s.id!==id); save(); renderCanvas(); updateCount(); toast('削除しました'); }
+function deleteShortcut(id) { state.shortcuts = state.shortcuts.filter(s=>s.id!==id); reflowAllFrames(); save(); renderCanvas(); updateCount(); toast('削除しました'); }
 function closeEditModal() { document.getElementById('editOverlay').classList.remove('open'); editingId=null; }
 
 /* ══════════════════════════════════
