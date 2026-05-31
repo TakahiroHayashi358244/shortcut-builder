@@ -601,7 +601,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0531j</span>
+    <span class="logo-ver">v3 build0531p</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -2191,8 +2191,10 @@ function onMM(e) {
   if (isResizing) return doResize(e.clientX, e.clientY);
   if (!isDragging || !dragEl) return;
   const cv = document.getElementById('canvas'), cr = cv.getBoundingClientRect();
+  const TAB_H = 36;
+  const minTop = dragType === 'frame' ? TAB_H : 0; // 枠はタブが上に出るので上端を確保
   const nx = Math.max(0, e.clientX - cr.left - dragOffsetX + cv.scrollLeft);
-  const ny = Math.max(0, e.clientY - cr.top  - dragOffsetY + cv.scrollTop);
+  const ny = Math.max(minTop, e.clientY - cr.top  - dragOffsetY + cv.scrollTop);
   dragEl.style.left = nx + 'px';
   dragEl.style.top  = ny + 'px';
   if (dragType === 'frame' && dragFrameChildren.length) { moveFrameChildren(nx, ny); renderConnectors(); }
@@ -2208,7 +2210,7 @@ function onMU() {
   }
   else if (dragType === 'frame') {
     const f = (state.frames||[]).find(x=>x.id===dragId);
-    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); save(); renderConnectors(); }
+    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); resolveFrameOverlaps(f.id); save(); renderCanvas(); }
   }
   dragFrameChildren = [];
   dragEl = null;
@@ -2217,8 +2219,10 @@ function onTM(e) {
   if (isResizing) { e.preventDefault(); return doResize(e.touches[0].clientX, e.touches[0].clientY); }
   if (!isDragging || !dragEl) return; e.preventDefault();
   const t = e.touches[0], cv = document.getElementById('canvas'), cr = cv.getBoundingClientRect();
+  const TAB_H = 36;
+  const minTop = dragType === 'frame' ? TAB_H : 0;
   const nx = Math.max(0, t.clientX - cr.left - dragOffsetX + cv.scrollLeft);
-  const ny = Math.max(0, t.clientY - cr.top  - dragOffsetY + cv.scrollTop);
+  const ny = Math.max(minTop, t.clientY - cr.top  - dragOffsetY + cv.scrollTop);
   dragEl.style.left = nx + 'px';
   dragEl.style.top  = ny + 'px';
   if (dragType === 'frame' && dragFrameChildren.length) { moveFrameChildren(nx, ny); renderConnectors(); }
@@ -2234,7 +2238,7 @@ function onTE() {
   }
   else if (dragType === 'frame') {
     const f = (state.frames||[]).find(x=>x.id===dragId);
-    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); save(); renderConnectors(); }
+    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); resolveFrameOverlaps(f.id); save(); renderCanvas(); }
   }
   dragFrameChildren = [];
   dragEl = null;
@@ -2259,85 +2263,156 @@ function overlapRect(a, b) {
   return null;
 }
 
-// 枠内で重なりを解消する。moved（ドロップされたボタン）は動かさず固定し、
-// 重なった相手を「重なりが深い方向」へ押しのける。押された相手がさらに重なれば同方向に連鎖。
-// 最後に枠を中身にフィットさせる。
-function reflowFrame(f, movedId) {
-  const PAD = 22, TOP = 40, GAP = 14, MIN_W = 100, MIN_H = 80;
-  const kids = state.shortcuts.filter(s => scInFrame(s, f));
-  if (!kids.length) return;
+// 枠内のボタンを「枠の左上を起点」にグリッド再整列する。
+// 枠の左上(f.x,f.y)は固定し、サイズだけ中身に合わせる。
+// 列数 f.cols を状態として保持し、movedId があればドロップ位置で列数を増減する
+// （既存ボタンの横に置けば列を増やして横へ拡張、下に置けば列維持で縦へ拡張）。
+function reflowFrame(f, kids, movedId) {
+  const PAD = 22, TOP = 40, GAP = 14, MIN_W = 100, MIN_H = 80, TAB_H = 36;
+  if (!kids || !kids.length) return;
 
-  // moved を起点に重なり解消（push）。anchor は動かさない集合。
+  const BTN = Math.max(...kids.map(s => Math.max(s.w||130, s.h||130)));
+  const n = kids.length;
+
+  // 現在の列数（状態）。未設定なら現在の枠幅から推定。
+  let cols = f.cols;
+  if (!cols || cols < 1) {
+    const innerW = Math.max(BTN, f.w - PAD*2);
+    cols = Math.max(1, Math.floor((innerW + GAP) / (BTN + GAP)));
+  }
+
   const moved = movedId != null ? kids.find(s => s.id === movedId) : null;
 
-  // 押しのけ：rect a に重なっている others を、深い方向へずらす。BFS的に連鎖。
-  function pushAway(anchor) {
-    const queue = [anchor];
-    const fixed = new Set([anchor.id]); // これ以上動かさない（起点と確定済み）
-    let guard = 0;
-    while (queue.length && guard++ < 500) {
-      const cur = queue.shift();
-      kids.forEach(other => {
-        if (other.id === cur.id) return;
-        const ov = overlapRect(cur, other);
-        if (!ov) return;
-        if (fixed.has(other.id)) return; // 既に確定したものは押さない（無限ループ防止）
-        const ow = other.w||130, oh = other.h||130;
-        // 深い方向へ避ける：縦の重なり(oy)が横(ox)より深ければ縦に、そうでなければ横に
-        if (ov.oy <= ov.ox) {
-          // 横方向に避ける：cur の右にずらす（curの中心より右にいれば右、左なら左）
-          if ((other.x + ow/2) >= (cur.x + (cur.w||130)/2)) other.x = cur.x + (cur.w||130) + GAP;
-          else other.x = cur.x - ow - GAP;
-        } else {
-          // 縦方向に避ける：cur の下にずらす（中心が下なら下、上なら上）
-          if ((other.y + oh/2) >= (cur.y + (cur.h||130)/2)) other.y = cur.y + (cur.h||130) + GAP;
-          else other.y = cur.y - oh - GAP;
-        }
-        fixed.add(other.id);
-        queue.push(other);
-      });
+  if (moved && n > 1) {
+    // 最も近い既存ボタンとの位置関係で、横方向に置いたか縦方向に置いたかを判定
+    const others = kids.filter(s => s.id !== movedId);
+    const mcx = moved.x + (moved.w||130)/2;
+    const mcy = moved.y + (moved.h||130)/2;
+    let near = others[0], nd = Infinity;
+    others.forEach(s => {
+      const cx = s.x + (s.w||130)/2, cy = s.y + (s.h||130)/2;
+      const d = Math.hypot(cx - mcx, cy - mcy);
+      if (d < nd) { nd = d; near = s; }
+    });
+    const ncx = near.x + (near.w||130)/2, ncy = near.y + (near.h||130)/2;
+    const dx = Math.abs(mcx - ncx), dy = Math.abs(mcy - ncy);
+    if (dx >= dy) {
+      // 横に置いた → 列を増やして横に広げる
+      cols = Math.min(n, cols + 1);
+    } else {
+      // 下（縦）に置いた → 列を減らして縦に伸ばす
+      cols = Math.max(1, cols - 1);
     }
+    cols = Math.max(1, Math.min(cols, n));
   }
 
-  if (moved) {
-    pushAway(moved);
-  } else {
-    // moved指定なし（削除・複製など）：左上から順に、後続を前のものと重ならないよう押しのけ
-    const ordered = kids.slice().sort((a,b) => (a.y - b.y) || (a.x - b.x));
-    for (let i = 1; i < ordered.length; i++) {
-      for (let j = 0; j < i; j++) {
-        const ov = overlapRect(ordered[j], ordered[i]);
-        if (!ov) continue;
-        const oh = ordered[i].h||130;
-        // 既存方式に近い：下にずらす
-        ordered[i].y = ordered[j].y + (ordered[j].h||130) + GAP;
-      }
-    }
-  }
+  // 並び順：現在位置（上→下、左→右）。movedはドロップ位置の順序で自然に挿入される。
+  const ordered = kids.slice().sort((a,b) => (a.y - b.y) || (a.x - b.x));
 
-  // 枠を中身（全ボタンの外接矩形＋余白）にフィット
-  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-  kids.forEach(s => {
-    const sw=s.w||130, sh=s.h||130;
-    minX=Math.min(minX,s.x); minY=Math.min(minY,s.y);
-    maxX=Math.max(maxX,s.x+sw); maxY=Math.max(maxY,s.y+sh);
+  // 左上起点でグリッド配置（左→右、cols で折り返して下へ）
+  const baseX = f.x + PAD;
+  const baseY = f.y + TOP;
+  ordered.forEach((s, i) => {
+    const cI = i % cols, rI = Math.floor(i / cols);
+    s.x = baseX + cI * (BTN + GAP);
+    s.y = baseY + rI * (BTN + GAP);
+    s.w = BTN; s.h = BTN;
   });
-  f.x = Math.round(minX - PAD);
-  f.y = Math.round(minY - TOP);
-  f.w = Math.max(MIN_W, Math.round((maxX - minX) + PAD*2));
-  f.h = Math.max(MIN_H, Math.round((maxY - minY) + TOP + PAD));
+
+  // 枠サイズを中身に合わせる（左上は固定）。列数を状態として保存。
+  const usedCols = Math.min(cols, n);
+  const usedRows = Math.ceil(n / cols);
+  f.cols = cols;
+  let nw = Math.max(MIN_W, usedCols * BTN + (usedCols - 1) * GAP + PAD*2);
+  let nh = Math.max(MIN_H, usedRows * BTN + (usedRows - 1) * GAP + TOP + PAD);
+
+  // 上の壁：名札(タブ)がボード上端より上に出ないよう、枠上端を TAB_H 以上に保つ。
+  let nx = f.x, ny = f.y;
+  if (ny < TAB_H) {
+    const shift = TAB_H - ny;
+    ny = TAB_H;
+    ordered.forEach(s => { s.y += shift; });
+  }
+  if (nx < 0) {
+    const shift = -nx;
+    nx = 0;
+    ordered.forEach(s => { s.x += shift; });
+  }
+  f.x = nx; f.y = ny; f.w = nw; f.h = nh;
 }
 
 // 全枠を整列＆フィット。movedId はドロップされたボタン。
 function reflowAllFrames(movedId) {
   const frames = state.frames || [];
-  // 所属を現座標で一括確定（処理中に所属が変わる連鎖を防ぐ）
-  const kidsByFrame = frames.map(f => state.shortcuts.filter(s => scInFrame(s, f)));
+  if (!frames.length) return;
+  // 各ボタンを「中心を含む枠のうち1つだけ」に割り当て（重複所属で座標が壊れるのを防ぐ）
+  const kidsByFrame = frames.map(() => []);
+  const frameIndexById = {};
+  frames.forEach((f, i) => { frameIndexById[f.id] = i; });
+  state.shortcuts.forEach(s => {
+    for (let i = 0; i < frames.length; i++) {
+      if (scInFrame(s, frames[i])) { kidsByFrame[i].push(s); break; }
+    }
+  });
   frames.forEach((f, i) => {
     if (!kidsByFrame[i].length) return; // 空枠はそのまま
     const hasMoved = movedId != null && kidsByFrame[i].some(s => s.id === movedId);
-    reflowFrame(f, hasMoved ? movedId : null);
+    reflowFrame(f, kidsByFrame[i], hasMoved ? movedId : null);
   });
+  // 枠どうしが重なる場合は避ける。所属は上で確定したマップを使い回す（避ける最中に所属判定が崩れるのを防ぐ）。
+  const ownership = {};
+  frames.forEach((f, i) => { ownership[f.id] = kidsByFrame[i]; });
+  resolveFrameOverlaps(null, ownership);
+}
+
+// 2つの枠が重なっているか
+function framesOverlap(a, b) {
+  return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+}
+// 枠を dx,dy 動かす（所属ボタンも一緒に動かす）。ownershipKids が渡されればそれを使う。
+function moveFrameBy(f, dx, dy, ownershipKids) {
+  const kids = ownershipKids || state.shortcuts.filter(s => scInFrame(s, f));
+  f.x += dx; f.y += dy;
+  kids.forEach(s => { s.x += dx; s.y += dy; });
+}
+// 枠どうしの重なりを解消する。anchorFrameId があればその枠は動かさず他を避ける。
+// ownership: {frameId: kids[]} があれば所属判定に使い回す（避ける最中の所属ズレを防ぐ）。
+function resolveFrameOverlaps(anchorFrameId, ownership) {
+  const GAP = 20;
+  const frames = state.frames || [];
+  if (frames.length < 2) return;
+  const kidsOf = (f) => (ownership && ownership[f.id]) ? ownership[f.id]
+                         : state.shortcuts.filter(s => scInFrame(s, f));
+  let guard = 0;
+  let again = true;
+  while (again && guard++ < 200) {
+    again = false;
+    for (let i = 0; i < frames.length; i++) {
+      for (let j = 0; j < frames.length; j++) {
+        if (i === j) continue;
+        const a = frames[i], b = frames[j];
+        if (!framesOverlap(a, b)) continue;
+        // a は固定したい側、b を動かす。anchor指定があればそれを固定。
+        let mover = b, anchor = a;
+        if (anchorFrameId != null) {
+          if (b.id === anchorFrameId) { mover = a; anchor = b; }
+          else if (a.id === anchorFrameId) { mover = b; anchor = a; }
+        }
+        // 重なりの浅い方向へ mover を押し出す（縦か横か）
+        const ox = Math.min(anchor.x+anchor.w, mover.x+mover.w) - Math.max(anchor.x, mover.x);
+        const oy = Math.min(anchor.y+anchor.h, mover.y+mover.h) - Math.max(anchor.y, mover.y);
+        if (oy <= ox) {
+          moveFrameBy(mover, 0, (anchor.y + anchor.h + GAP) - mover.y, kidsOf(mover));
+        } else {
+          moveFrameBy(mover, (anchor.x + anchor.w + GAP) - mover.x, 0, kidsOf(mover));
+        }
+        again = true;
+      }
+    }
+  }
+  // 仕上げ：全枠のタブ(名札)がボード上端より上に出ないよう、y を TAB_H 以上にクランプ
+  const TAB_H = 36;
+  frames.forEach(f => { if (f.y < TAB_H) moveFrameBy(f, 0, TAB_H - f.y, kidsOf(f)); });
 }
 
 /* ══════════════════════════════════
