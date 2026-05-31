@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -601,7 +602,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0531p</span>
+    <span class="logo-ver">v3 build0531r</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -2210,7 +2211,7 @@ function onMU() {
   }
   else if (dragType === 'frame') {
     const f = (state.frames||[]).find(x=>x.id===dragId);
-    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); resolveFrameOverlaps(f.id); save(); renderCanvas(); }
+    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); resolveFrameOverlaps(f.id, buildOwnership(f.id)); save(); renderCanvas(); }
   }
   dragFrameChildren = [];
   dragEl = null;
@@ -2238,7 +2239,7 @@ function onTE() {
   }
   else if (dragType === 'frame') {
     const f = (state.frames||[]).find(x=>x.id===dragId);
-    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); resolveFrameOverlaps(f.id); save(); renderCanvas(); }
+    if(f){ const nx=parseInt(dragEl.style.left), ny=parseInt(dragEl.style.top); f.x=nx; f.y=ny; commitFrameChildren(nx,ny); resolveFrameOverlaps(f.id, buildOwnership(f.id)); save(); renderCanvas(); }
   }
   dragFrameChildren = [];
   dragEl = null;
@@ -2341,27 +2342,46 @@ function reflowFrame(f, kids, movedId) {
   f.x = nx; f.y = ny; f.w = nw; f.h = nh;
 }
 
+// 各ボタンを所属枠に割り当てた {frameId: kids[]} を作る。
+// priorityFrameId を指定すると、その枠に入るボタンを最優先で割り当てる
+// （移動中の枠の子を確実に保持し、重なった相手枠に奪われないようにする）。
+function buildOwnership(priorityFrameId) {
+  const frames = state.frames || [];
+  const map = {};
+  frames.forEach(f => { map[f.id] = []; });
+  const taken = new Set();
+  // 優先枠があれば、まずそこに入るボタンを確定
+  if (priorityFrameId != null) {
+    const pf = frames.find(f => f.id === priorityFrameId);
+    if (pf) {
+      state.shortcuts.forEach(s => {
+        if (scInFrame(s, pf)) { map[priorityFrameId].push(s); taken.add(s.id); }
+      });
+    }
+  }
+  // 残りを各枠に割り当て（中心を含む最初の枠）
+  state.shortcuts.forEach(s => {
+    if (taken.has(s.id)) return;
+    for (let i = 0; i < frames.length; i++) {
+      if (frames[i].id === priorityFrameId) continue;
+      if (scInFrame(s, frames[i])) { map[frames[i].id].push(s); break; }
+    }
+  });
+  return map;
+}
+
 // 全枠を整列＆フィット。movedId はドロップされたボタン。
 function reflowAllFrames(movedId) {
   const frames = state.frames || [];
   if (!frames.length) return;
-  // 各ボタンを「中心を含む枠のうち1つだけ」に割り当て（重複所属で座標が壊れるのを防ぐ）
-  const kidsByFrame = frames.map(() => []);
-  const frameIndexById = {};
-  frames.forEach((f, i) => { frameIndexById[f.id] = i; });
-  state.shortcuts.forEach(s => {
-    for (let i = 0; i < frames.length; i++) {
-      if (scInFrame(s, frames[i])) { kidsByFrame[i].push(s); break; }
-    }
+  const ownership = buildOwnership();
+  frames.forEach(f => {
+    const kids = ownership[f.id];
+    if (!kids.length) return; // 空枠はそのまま
+    const hasMoved = movedId != null && kids.some(s => s.id === movedId);
+    reflowFrame(f, kids, hasMoved ? movedId : null);
   });
-  frames.forEach((f, i) => {
-    if (!kidsByFrame[i].length) return; // 空枠はそのまま
-    const hasMoved = movedId != null && kidsByFrame[i].some(s => s.id === movedId);
-    reflowFrame(f, kidsByFrame[i], hasMoved ? movedId : null);
-  });
-  // 枠どうしが重なる場合は避ける。所属は上で確定したマップを使い回す（避ける最中に所属判定が崩れるのを防ぐ）。
-  const ownership = {};
-  frames.forEach((f, i) => { ownership[f.id] = kidsByFrame[i]; });
+  // 枠どうしが重なる場合は避ける。所属は確定マップを使い回す。
   resolveFrameOverlaps(null, ownership);
 }
 
