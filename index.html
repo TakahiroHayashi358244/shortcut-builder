@@ -601,7 +601,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0601d</span>
+    <span class="logo-ver">v3 build0601e</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -617,6 +617,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="header-right">
     <button class="btn btn-save" onclick="openSaveModal()">新規保存</button>
     <button class="btn btn-save" id="updateBtn" style="display:none;background:#5b21b6;border-color:#5b21b6" onclick="confirmOverwrite()">上書き更新</button>
+    <button class="btn" id="pwBtn" style="display:none" onclick="openPasswordModal()" title="このPINのパスワードを設定・変更・解除">🔒 パスワード</button>
     <button class="btn btn-load" onclick="openLoadModal()">クラウド読込</button>
     <span id="currentPin" class="pin-display">PINコード未設定</span>
     <button class="btn btn-icon" onclick="openSettingsModal()" title="設定" style="color:var(--text2);font-size:16px">⚙</button>
@@ -1292,6 +1293,7 @@ function resetLayout() {
   currentPin = null;
   const _cp=document.getElementById('currentPin'); _cp.textContent='PINコード未設定'; _cp.classList.remove('active');
   document.getElementById('updateBtn').style.display = 'none';
+        document.getElementById('pwBtn').style.display = 'none';
   save(); renderCanvas(); updateCount(); toast('新規レイアウトを作成しました');
 }
 
@@ -1354,6 +1356,7 @@ async function doCloudSave() {
       const label = name ? `${name}（${pin}）` : `PIN: ${pin}`;
       const _cp=document.getElementById('currentPin'); _cp.textContent=label; _cp.classList.add('active');
       document.getElementById('updateBtn').style.display = 'inline-flex';
+      document.getElementById('pwBtn').style.display = 'inline-flex';
       setStatus('saveStatus', json.message, 'success');
       toast('保存しました (PIN: '+pin+')');
       setTimeout(closeSaveModal, 1200);
@@ -1369,13 +1372,45 @@ function confirmOverwrite() {
 }
 function closeOverwriteModal() { document.getElementById('overwriteOverlay').classList.remove('open'); }
 
-async function doCloudUpdate() {
+// パスワードの設定・変更・解除（現在開いているPINに対して）
+async function openPasswordModal() {
+  if (!currentPin || !GAS_URL) { toast('先にクラウド保存/読込してください','error'); return; }
+  const np = prompt('このPINの新しいパスワードを入力してください。\n（空欄のままOKでパスワードを解除します）');
+  if (np == null) return; // キャンセル
+  await sendSetPassword(np, null);
+}
+async function sendSetPassword(newPassword, currentPassword) {
+  try {
+    const body = { action:'setPassword', pin: currentPin, newPassword: newPassword };
+    if (currentPassword != null) body.password = currentPassword;
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(body) });
+    const json = await res.json();
+    if (json.success) {
+      toast(newPassword && newPassword.length ? 'パスワードを設定しました' : 'パスワードを解除しました');
+    } else if (json.locked) {
+      const cur = prompt(currentPassword!=null ? '現在のパスワードが違います。再入力してください' : '変更には現在のパスワードが必要です。入力してください');
+      if (cur == null) { toast('変更を中止しました','error'); return; }
+      return sendSetPassword(newPassword, cur);
+    } else {
+      toast(json.error || '設定に失敗しました','error');
+    }
+  } catch(e) { toast('通信エラー','error'); }
+}
+
+async function doCloudUpdate(passwordArg) {
   if (!currentPin || !GAS_URL) { toast('API URL未設定または未保存','error'); return; }
   toast('更新中…');
   try {
-    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'overwrite',pin:currentPin,data:state}) });
+    const body = { action:'overwrite', pin:currentPin, data:state };
+    if (passwordArg != null) body.password = passwordArg;
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(body) });
     const json = await res.json();
     if (json.success) toast('PIN: '+currentPin+' 上書き更新しました');
+    else if (json.locked) {
+      const pw = prompt(passwordArg!=null ? 'パスワードが違います。再入力してください' : 'このPINはパスワードで保護されています。パスワードを入力してください');
+      if (pw == null) { toast('更新を中止しました','error'); return; }
+      return doCloudUpdate(pw);
+    }
     else toast(json.error||'更新失敗','error');
   } catch(err) { toast('通信エラー','error'); }
 }
@@ -1482,24 +1517,31 @@ function openDeletePinModal(pin, name) {
   document.getElementById('deletePinName').textContent = name ? `「${name}」` : '';
   document.getElementById('deletePinOverlay').classList.add('open');
 }
-async function doDeletePin() {
+async function doDeletePin(passwordArg) {
   if (!deletePinTarget || !GAS_URL) return;
   const btn = document.getElementById('deletePinConfirmBtn');
   btn.disabled = true;
   try {
-    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'delete', pin:deletePinTarget}) });
+    const body = { action:'delete', pin:deletePinTarget };
+    if (passwordArg != null) body.password = passwordArg;
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(body) });
     const json = await res.json();
     if (json.success) {
       toast(`PIN: ${deletePinTarget} を削除しました`);
-      // 現在表示中のボードのPINを消した場合は表示をリセット
       if (deletePinTarget === currentPin) {
         currentPin = null;
         const _cp = document.getElementById('currentPin');
         _cp.textContent = 'PINコード未設定'; _cp.classList.remove('active');
         document.getElementById('updateBtn').style.display = 'none';
+        document.getElementById('pwBtn').style.display = 'none';
       }
       document.getElementById('deletePinOverlay').classList.remove('open');
       fetchPinList();
+    } else if (json.locked) {
+      btn.disabled = false;
+      const pw = prompt(passwordArg!=null ? 'パスワードが違います。再入力してください' : 'このPINはパスワードで保護されています。パスワードを入力してください');
+      if (pw == null) { toast('削除を中止しました','error'); return; }
+      return doDeletePin(pw);
     } else { toast(json.error||'削除失敗','error'); }
   } catch(e) { toast('通信エラー','error'); }
   btn.disabled = false;
@@ -1562,13 +1604,15 @@ function migrateConnections(st) {
   if (st.nextConnId <= maxId) st.nextConnId = maxId + 1;
 }
 
-async function doCloudLoad() {
+async function doCloudLoad(passwordArg) {
   const pin = getPin('loadPinGroup');
   if (pin.length !== 4) { setStatus('loadStatus','4桁入力してください','error'); return; }
   document.getElementById('loadBtn').disabled = true;
   setStatus('loadStatus','読み込み中…','loading');
   try {
-    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'load',pin}) });
+    const body = { action:'load', pin };
+    if (passwordArg != null) body.password = passwordArg;
+    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(body) });
     const json = await res.json();
     if (json.success) {
       state = json.data;
@@ -1584,9 +1628,17 @@ async function doCloudLoad() {
       const label = loadedName ? `${loadedName}（${pin}）` : `PIN: ${pin}`;
       const _cp=document.getElementById('currentPin'); _cp.textContent=label; _cp.classList.add('active');
       document.getElementById('updateBtn').style.display = 'inline-flex';
+      document.getElementById('pwBtn').style.display = 'inline-flex';
       setStatus('loadStatus','読み込み完了','success');
       toast('読み込みました');
       setTimeout(closeLoadModal, 1200);
+    } else if (json.locked) {
+      // パスワード保護されている：入力を促して再送
+      document.getElementById('loadBtn').disabled = false;
+      const msg = passwordArg != null ? 'パスワードが違います。再入力してください' : 'このPINはパスワードで保護されています。パスワードを入力してください';
+      const pw = prompt(msg);
+      if (pw == null) { setStatus('loadStatus','読み込みを中止しました','error'); return; }
+      return doCloudLoad(pw);
     } else { setStatus('loadStatus', json.error||'失敗','error'); }
   } catch(err) { setStatus('loadStatus','通信エラー','error'); }
   document.getElementById('loadBtn').disabled = false;
