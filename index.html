@@ -601,7 +601,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0601e</span>
+    <span class="logo-ver">v3 build0601f</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -617,7 +617,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="header-right">
     <button class="btn btn-save" onclick="openSaveModal()">新規保存</button>
     <button class="btn btn-save" id="updateBtn" style="display:none;background:#5b21b6;border-color:#5b21b6" onclick="confirmOverwrite()">上書き更新</button>
-    <button class="btn" id="pwBtn" style="display:none" onclick="openPasswordModal()" title="このPINのパスワードを設定・変更・解除">🔒 パスワード</button>
+    <button class="btn" id="pwBtn" style="background:#7048e8;border-color:#7048e8;color:#fff" onclick="openPasswordModal()" title="開いているPINのパスワードを設定・変更・解除">🔒 パスワード</button>
     <button class="btn btn-load" onclick="openLoadModal()">クラウド読込</button>
     <span id="currentPin" class="pin-display">PINコード未設定</span>
     <button class="btn btn-icon" onclick="openSettingsModal()" title="設定" style="color:var(--text2);font-size:16px">⚙</button>
@@ -1293,7 +1293,6 @@ function resetLayout() {
   currentPin = null;
   const _cp=document.getElementById('currentPin'); _cp.textContent='PINコード未設定'; _cp.classList.remove('active');
   document.getElementById('updateBtn').style.display = 'none';
-        document.getElementById('pwBtn').style.display = 'none';
   save(); renderCanvas(); updateCount(); toast('新規レイアウトを作成しました');
 }
 
@@ -1356,7 +1355,6 @@ async function doCloudSave() {
       const label = name ? `${name}（${pin}）` : `PIN: ${pin}`;
       const _cp=document.getElementById('currentPin'); _cp.textContent=label; _cp.classList.add('active');
       document.getElementById('updateBtn').style.display = 'inline-flex';
-      document.getElementById('pwBtn').style.display = 'inline-flex';
       setStatus('saveStatus', json.message, 'success');
       toast('保存しました (PIN: '+pin+')');
       setTimeout(closeSaveModal, 1200);
@@ -1533,7 +1531,6 @@ async function doDeletePin(passwordArg) {
         const _cp = document.getElementById('currentPin');
         _cp.textContent = 'PINコード未設定'; _cp.classList.remove('active');
         document.getElementById('updateBtn').style.display = 'none';
-        document.getElementById('pwBtn').style.display = 'none';
       }
       document.getElementById('deletePinOverlay').classList.remove('open');
       fetchPinList();
@@ -1628,7 +1625,6 @@ async function doCloudLoad(passwordArg) {
       const label = loadedName ? `${loadedName}（${pin}）` : `PIN: ${pin}`;
       const _cp=document.getElementById('currentPin'); _cp.textContent=label; _cp.classList.add('active');
       document.getElementById('updateBtn').style.display = 'inline-flex';
-      document.getElementById('pwBtn').style.display = 'inline-flex';
       setStatus('loadStatus','読み込み完了','success');
       toast('読み込みました');
       setTimeout(closeLoadModal, 1200);
