@@ -601,7 +601,7 @@ textarea.input{resize:vertical;line-height:1.65}
   <div class="logo">
     <div class="logo-mark">⚡</div>
     <span class="logo-name">Shortcut Builder</span>
-    <span class="logo-ver">v3 build0601f</span>
+    <span class="logo-ver">v3 build0601g</span>
   </div>
   <div class="header-sep"></div>
   <div class="header-actions">
@@ -967,9 +967,18 @@ textarea.input{resize:vertical;line-height:1.65}
       <span style="font-size:12px;font-weight:600;color:var(--text2)">保存済みPIN一覧</span>
       <button class="btn btn-sm" onclick="fetchPinList()" id="pinListRefreshBtn" style="font-size:11px;padding:4px 10px">🔄 更新</button>
     </div>
+    <!-- マスターパスワード認証（保護されたPINも表示する） -->
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+      <input type="password" id="masterPwInput" placeholder="マスターパスワード（任意）" autocomplete="off"
+        style="flex:1;font-size:12px;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text)"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();authMasterList();}">
+      <button class="btn btn-sm" onclick="authMasterList()" style="font-size:11px;padding:6px 10px;background:#7048e8;border-color:#7048e8;color:#fff">🔓 認証</button>
+    </div>
+    <div id="masterStatus" style="font-size:11px;min-height:14px;margin-bottom:6px"></div>
     <div id="pinListArea" style="min-height:60px;max-height:220px;overflow-y:auto;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px">
       <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:8px">「更新」を押して一覧を取得</p>
     </div>
+    <p style="font-size:10px;color:var(--text3);margin-top:6px">🔒 が付いたPINはパスワード保護。認証前はマスターパスワードで一覧に表示できます。</p>
   </div>
 
   <div class="modal-actions center" style="margin-top:14px">
@@ -1417,6 +1426,8 @@ function openLoadModal() {
   if (!GAS_URL) { toast('API URL未設定です（⚙設定から入力）','error'); return; }
   clearPin('loadPinGroup');
   document.getElementById('loadStatus').textContent = '';
+  const mp = document.getElementById('masterPwInput'); if (mp) mp.value = '';
+  const ms = document.getElementById('masterStatus'); if (ms) ms.textContent = '';
   document.getElementById('pinListArea').innerHTML = '<p style="font-size:12px;color:var(--text3);text-align:center;padding:8px">読み込み中…</p>';
   document.getElementById('loadOverlay').classList.add('open');
   setTimeout(() => { const f=document.getElementById('loadPinGroup').querySelector('.pin-digit'); f.focus(); }, 150);
@@ -1424,19 +1435,34 @@ function openLoadModal() {
 }
 function closeLoadModal() { document.getElementById('loadOverlay').classList.remove('open'); }
 
-async function fetchPinList() {
+function authMasterList() {
+  const v = (document.getElementById('masterPwInput').value || '').trim();
+  fetchPinList(v);
+}
+
+async function fetchPinList(master) {
   if (!GAS_URL) return;
   const btn = document.getElementById('pinListRefreshBtn');
   if (btn) btn.disabled = true;
   const area = document.getElementById('pinListArea');
   area.innerHTML = '<p style="font-size:12px;color:var(--text3);text-align:center;padding:8px">取得中…</p>';
   try {
+    const body = { action: 'list' };
+    if (master != null && master.length) body.master = master;
     const res = await fetch(GAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'list' })
+      body: JSON.stringify(body)
     });
     const json = await res.json();
+    // マスター認証の結果を表示
+    const ms = document.getElementById('masterStatus');
+    if (ms) {
+      if (json.authFailed) ms.textContent = 'マスターパスワードが違います';
+      else if (json.showAll) ms.textContent = '認証済み：保護されたPINも表示中';
+      else ms.textContent = '';
+      ms.style.color = json.authFailed ? 'var(--danger)' : 'var(--ok,#37b24d)';
+    }
     if (json.success && json.pins && json.pins.length > 0) {
       area.innerHTML = '';
       json.pins.forEach(item => {
@@ -1444,10 +1470,11 @@ async function fetchPinList() {
         row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:5px';
         const updated = item.updated ? new Date(item.updated).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
         const nameStr = item.name ? `<span style="font-size:11px;color:var(--text2);margin-left:4px">${esc(item.name)}</span>` : '';
+        const lockStr = item.locked ? '<span style="font-size:11px;margin-left:4px" title="パスワード保護">🔒</span>' : '';
         const loadBtn = document.createElement('button');
         loadBtn.className = 'btn btn-sm';
         loadBtn.style.cssText = 'flex:1;justify-content:space-between;font-family:"DM Mono",monospace';
-        loadBtn.innerHTML = `<span><span style="font-size:14px;font-weight:700;letter-spacing:2px;color:var(--accent)">${item.pin}</span>${nameStr}</span><span style="font-size:10px;color:var(--text3)">${updated}</span>`;
+        loadBtn.innerHTML = `<span><span style="font-size:14px;font-weight:700;letter-spacing:2px;color:var(--accent)">${item.pin}</span>${lockStr}${nameStr}</span><span style="font-size:10px;color:var(--text3)">${updated}</span>`;
         loadBtn.onclick = () => {
           const digits = document.getElementById('loadPinGroup').querySelectorAll('.pin-digit');
           item.pin.split('').forEach((ch, i) => { if (digits[i]) digits[i].value = ch; });
